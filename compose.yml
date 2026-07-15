@@ -1,0 +1,128 @@
+name: first-choice-for-food
+
+services:
+  web:
+    image: first-choice-for-food-web:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web-runtime
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      NITRO_HOST: 0.0.0.0
+      NITRO_PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-food_app}:${POSTGRES_PASSWORD:-local-only-change-me}@postgres:5432/${POSTGRES_DB:-first_choice_food}
+      SESSION_PASSWORD: ${SESSION_PASSWORD:-development-session-password-change-me-32-chars}
+      IDENTITY_HMAC_SECRET: ${IDENTITY_HMAC_SECRET:-development-identity-hmac-secret-change-me}
+      INTERNAL_WORKER_TOKEN: ${INTERNAL_WORKER_TOKEN:-development-internal-worker-token-change-me}
+      GOOGLE_WORKSPACE_DOMAIN: ${GOOGLE_WORKSPACE_DOMAIN:-example.com}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3000/api/auth/google-callback}
+      ALLOW_DEV_AUTH: ${ALLOW_DEV_AUTH:-false}
+      TFDA_AUTO_DOWNLOAD: ${TFDA_AUTO_DOWNLOAD:-false}
+      TFDA_NUTRIENT_XLSX_URL: ${TFDA_NUTRIENT_XLSX_URL:-https://consumer.fda.gov.tw/uc/GetFile.ashx?type=ServerFile&id=4862259227103213368}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    networks:
+      - frontend
+      - backend
+
+  worker:
+    image: first-choice-for-food-worker:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker-runtime
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-food_app}:${POSTGRES_PASSWORD:-local-only-change-me}@postgres:5432/${POSTGRES_DB:-first_choice_food}
+      AI_EGRESS_MODE: ${AI_EGRESS_MODE:-local-only}
+      AI_TEXT_PROVIDER: ${AI_TEXT_PROVIDER:-stub}
+      AI_VISION_PROVIDER: ${AI_VISION_PROVIDER:-stub}
+      AI_AUDIO_PROVIDER: ${AI_AUDIO_PROVIDER:-stub}
+      AI_TEXT_MODEL: ${AI_TEXT_MODEL:-llama3.1:8b}
+      AI_VISION_MODEL: ${AI_VISION_MODEL:-llava:13b}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      WHISPER_BASE_URL: ${WHISPER_BASE_URL:-http://whisper:8000}
+      GPU_CONCURRENCY: 1
+      WEB_INTERNAL_URL: http://web:3000
+      INTERNAL_WORKER_TOKEN: ${INTERNAL_WORKER_TOKEN:-development-internal-worker-token-change-me}
+      TFDA_AUTO_DOWNLOAD: ${TFDA_AUTO_DOWNLOAD:-false}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      web:
+        condition: service_healthy
+    networks:
+      - frontend
+      - backend
+
+  migrate:
+    image: first-choice-for-food-migrator:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrator
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-food_app}:${POSTGRES_PASSWORD:-local-only-change-me}@postgres:5432/${POSTGRES_DB:-first_choice_food}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - backend
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-first_choice_food}
+      POSTGRES_USER: ${POSTGRES_USER:-food_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-only-change-me}
+    expose:
+      - "5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["local-ai"]
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - frontend
+
+volumes:
+  postgres_data:
+  ollama_data:
+  whisper_models:
+
+networks:
+  frontend:
+  backend:
+    internal: true

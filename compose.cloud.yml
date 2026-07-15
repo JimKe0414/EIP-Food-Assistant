@@ -1,0 +1,23 @@
+services:
+  web:
+    environment:
+      AI_EGRESS_MODE: cloud-approved
+
+  worker:
+    environment:
+      AI_EGRESS_MODE: cloud-approved
+      AI_TEXT_PROVIDER: ${AI_TEXT_PROVIDER:-google-genai}
+      AI_VISION_PROVIDER: ${AI_VISION_PROVIDER:-google-genai}
+      AI_AUDIO_PROVIDER: ${AI_AUDIO_PROVIDER:-google-genai}
+      GOOGLE_GENAI_TEXT_MODEL: ${GOOGLE_GENAI_TEXT_MODEL:-gemini-2.5-flash}
+      GOOGLE_GENAI_VISION_MODEL: ${GOOGLE_GENAI_VISION_MODEL:-gemini-2.5-flash}
+      GOOGLE_GENAI_AUDIO_MODEL: ${GOOGLE_GENAI_AUDIO_MODEL:-gemini-2.5-flash}
+    secrets:
+      - google_genai_api_key
+      - openai_compat_api_key
+
+secrets:
+  google_genai_api_key:
+    file: ./secrets/google_genai_api_key.txt
+  openai_compat_api_key:
+    file: ./secrets/openai_compat_api_key.txt

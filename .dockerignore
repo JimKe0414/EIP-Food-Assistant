@@ -1,0 +1,15 @@
+.git
+.gitignore
+.agents
+.codex
+.nuxt
+.output
+.pnpm-store
+node_modules
+flathead-hachi-pet-run
+*.log
+.env
+.env.*
+!.env.example
+README.md
+secrets

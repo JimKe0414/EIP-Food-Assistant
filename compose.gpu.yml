@@ -1,0 +1,34 @@
+services:
+  worker:
+    environment:
+      GPU_ENABLED: "true"
+      GPU_CONCURRENCY: "1"
+    command: ["sh", "-c", "node scripts/check-gpu.mjs && node dist/worker/index.js"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  whisper:
+    profiles: ["local-audio"]
+    build:
+      context: ./whisper
+    restart: unless-stopped
+    environment:
+      WHISPER_MODEL: ${WHISPER_MODEL:-medium}
+      WHISPER_DEVICE: cuda
+      WHISPER_COMPUTE_TYPE: float16
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - frontend
+    volumes:
+      - whisper_models:/root/.cache/huggingface
