@@ -1,0 +1,70 @@
+# 功能規劃 — 餐食記錄與營養分析
+
+> 2026-07-19 訂定。目的:先把「要做什麼、依什麼順序」定下來，再逐步實作，避免走一步算一步。
+> 這份文件描述「要做什麼」；技術現況（哪些已經蓋好、哪些是空殼）請對照 [TODO.md](TODO.md)。
+
+## 對照計劃書「2. 餐食記錄與營養分析」四項
+
+| # | 計劃書項目 | 現況 | 對應計畫 |
+|---|---|---|---|
+| 1 | 支援三種輸入方式：文字、拍照、語音 | 三種輸入面板（`TextRecordPanel`/`PhotoRecordPanel`/`VoiceRecordPanel`）與後端三種 AI provider 通道皆已完整實作 | 已具備，語音預設用 stub，見下方「語音輸入」 |
+| 2 | 拍照辨識：比對食藥署資料庫，轉換成營養分析 | AI 目前**直接自己猜**熱量/蛋白質，完全沒查 `nutrients` 表 | 第一、二期 |
+| 3 | 語音輸入：快速記錄、降低負擔 | 架構已完整（`VoiceRecordPanel.vue` → `transcribeMeal` job → `LocalWhisperProvider` 打 `whisper/` 服務的 `/transcribe`），但 `AI_AUDIO_PROVIDER` 預設 `stub`、`whisper/` 服務也還沒啟動測過 | **新增：第一期一併驗證**（見下） |
+| 4 | 自動產生每餐摘要，方便後續分析 | AI 已經會產生 `summary`（`mealAnalysisResultSchema.summary`），但這個欄位在存進 `meals` 表時**被直接丟棄**——`meals` 表、`mealInputSchema` 都沒有 summary 欄位，畫面上也沒地方顯示 | **新增：第一期一併補上**（見下） |
+
+第 2、3、4 項確實是你原本規劃裡忽略掉的，已經補進下面的分期計畫。
+
+## 資料來源說明（不進 git）
+
+台灣 TFDA「食品營養成分資料庫」xlsx 是政府公開資料，但檔案本身不放進這個 repo（避免不小心散布授權不明的整份資料檔）。
+
+**重點：應用程式本身完全不會去打政府網站的 URL。** 全部功能（`meals/analyze`、`recommend-lunch`...）永遠只查 Postgres 裡的 `nutrients` 表，這是唯一的資料來源。`TFDA_NUTRIENT_XLSX_URL` 只是**灌資料進資料庫這個一次性動作**的其中一種手段（背景排程自動下載），你已經有現成的 xlsx，可以完全不用管那個 URL，直接透過 `/api/tfda/sync` 把檔案上傳，一樣是同一套流程把資料寫進 `nutrients` 表，之後所有查詢都是純讀資料庫、不連網。
+
+目前 `nutrients` 表狀態未知（很可能是空的，還沒同步過），需要先確認一次。
+
+**已知問題**（於 2025版UPDATE1 檔案發現，見對話記錄）：現有解析器 `parseWorkbook()` 假設欄位標題在第 1 列，但實際檔案標題在第 2 列；且欄位改名（`樣品編號`→`整合編號`、`糖質(g)`→`糖質總量(g)`）。**這是第一期要修的前置 bug**，不修好，你把 xlsx 上傳到 `/api/tfda/sync` 也會直接失敗，資料進不了資料庫。
+
+## 分期計畫
+
+### 第一期：讓「一份記錄」對應「一個資料庫查得到的熱量」
+
+目標：拍照/文字辨識出的食物名稱，要能查到 `nutrients` 表裡的真實熱量，而不是讓 AI 自己猜數字。這是後面所有「精準控管卡路里」功能的地基，優先度最高但工作量其實不大，因為比對邏輯已經寫好只是沒接上。
+
+1. 修 `parseWorkbook()`：支援第 2 列標題、更新欄位名稱對照（`整合編號`、`糖質總量`），讓真實的政府檔案能同步成功
+2. 把 `findBestFoodMatch()` 接進 `meals/analyze.post.ts` 的流程：AI 辨識出食物名稱與份量描述後，用它去比對 `nutrients` 表，比對成功就用資料庫的熱量取代 AI 自己猜的數字；比對不到才 fallback 回 AI 估計值（並標記 `confidence` 較低，讓使用者知道這筆是用猜的）
+3. `mealCandidateSchema` 目前已有 `portionDescription`（自由文字），先不用改 schema，讓 AI prompt 明確要求輸出「一碗/半碗/四分之一碗」這類詞彙即可，第二期再做成真正的 UI 選項
+4. **補上餐點摘要的儲存**（計劃書項目 4）：`meals` 表加一個 `summary` 欄位（需要 `db:generate` 產生新 migration）、`mealInputSchema` 加上這個欄位、前端存檔時把 AI 分析結果的 `summary` 一併帶進去，`record`/首頁的紀錄列表上順便顯示出來，不然這個欄位存了也沒地方看
+5. **驗證語音輸入整條路（計劃書項目 3）**：啟動 `whisper/` 服務（`docker compose --profile local-audio up`）、把 `.env` 的 `AI_AUDIO_PROVIDER` 改成 `local-whisper`，在 `/record` 語音面板實測一次「錄音 → 轉文字 → 分析 → 存檔」，跟 Ollama 一樣，這條路架構都寫好了，只是從來沒有真的跑過一次確認能動
+
+### 第二期：拍照辨識 + 份量範圍選擇（你排的最優先體驗）
+
+目標：使用者拍照 → AI 辨識出「有哪些食物」→ 針對每個食物給份量範圍選項（一碗/半碗/四分之一碗，或依食物類型調整單位如「一片/一份」）→ 使用者選擇後才精確換算克數 → 換算熱量。
+
+1. `PhotoRecordPanel.vue` 加一個「份量確認」步驟：AI 回傳候選食物後，畫面上每個食物旁邊給範圍按鈕（沿用 `convertToGrams()` 的「份 + 每份克數」概念，之後可擴充碗/片等單位）
+2. 使用者選完份量後才呼叫換算，得到最終克數 → 乘上 `nutrients` 表裡「每 100g」的營養密度 → 得到這筆記錄的實際熱量
+3. 這一期做完，`record` 頁面的照片流程就會是「AI 只負責『認出是什麼』，資料庫負責『精確算多少』」，比較不會因為 AI 對份量的估計不準而造成熱量誤差
+
+### 第三期：一週為單位的攝取追蹤（你提到「當天效果不大，一週才看得出管理成效」）
+
+目標：`/trend` 頁面從目前的假資料（`~/data/mock`）換成真實查詢，並且加上「今天已吃多少 / 還剩多少額度 / 是否超標」的即時提示，累積到週視圖。
+
+1. 後端：新增（或擴充既有）查詢，依 `meals.mealDate` 彙總「今日已攝取」「本週每日」的熱量與三大營養素
+2. 前端：首頁的 AI 提醒卡片、`/trend` 的每週長條圖，換成吃真實查詢結果，不再是寫死的假資料
+3. 顯示邏輯依照你說的：今日已吃 vs 每日目標 → 算出剩餘額度；若已超標，用提示語氣「提醒之後幾天要更留意」而不是強制阻擋
+
+### 第四期：把「精準個人資料」真正接進每日熱量目標
+
+已決定：沿用現有的精準模式（`profile_snapshots` 精確年齡/身高/體重/體脂 → `calculateBodyMetrics()` 算 BMR/TDEE），不做年齡分級（少年/青年/中年/老年）的粗略額度系統。理由：使用者已經是用去識別化的 `identity_hmac` 存取，不是明文個資，精準模式本來就沒有隱私疑慮，分級只會犧牲準確度。
+
+待做：
+1. `recommend-lunch.post.ts` 的 `nutrientTargets` 目前永遠是空物件（`context: { ..., nutrientTargets: {} }`），沒有真的把使用者的 TDEE 帶進推薦邏輯 → 改成查最新一筆 `profile_snapshots`、算出 `calculateBodyMetrics()` 的 TDEE，帶進 AI 推薦的 context
+2. 第三期的「今日已吃 vs 還剩多少額度」也依賴這個真實 TDEE 當分母，兩期可以一起做
+
+---
+
+## 附註：目前系統已經蓋好、可以直接沿用的部分
+
+- AI provider 抽象層（`server/services/ai/**`）與非同步任務佇列（pg-boss + `/api/jobs/:id` 輪詢）已完整，接 Ollama 只需要改 `.env`
+- 食物名稱模糊比對 `findBestFoodMatch()`、單位換算 `convertToGrams()`（`shared/domain/food-matching.ts`）已寫好且有單元測試，只是還沒被任何 API 呼叫
+- 精準版 BMR/TDEE 計算 `calculateBodyMetrics()`（`shared/domain/body-metrics.ts`）已完整，`profile_snapshots` 表也已經在存使用者的年齡/性別/身高/體重/體脂
+- 午餐推薦（`recommend-lunch.post.ts`）已經會查 `nutrients` 表當作候選來源之一，但 `nutrientTargets` 目前永遠是空物件，沒有真的把使用者的熱量目標帶進推薦邏輯
