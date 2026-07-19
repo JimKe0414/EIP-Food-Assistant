@@ -7,7 +7,8 @@ const pool: FoodMatchCandidate[] = [{ id: 'A001', name: '白飯', aliases: null 
 const byId = new Map<string, NutrientRow>([
   ['A001', {
     sample_id: 'A001', name: '白飯', aliases: null,
-    calories_kcal: '183', protein_g: '3.1', fat_g: '0.3', carbs_g: '41.2', fiber_g: '0.6', sodium_mg: '2'
+    calories_kcal: '183', protein_g: '3.1', fat_g: '0.3', carbs_g: '41.2', fiber_g: '0.6',
+    optional_nutrients: { '鈉（mg）': 2 }
   }]
 ])
 

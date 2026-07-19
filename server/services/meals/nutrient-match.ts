@@ -11,8 +11,12 @@ export interface NutrientRow {
   fat_g: string | null
   carbs_g: string | null
   fiber_g: string | null
-  sodium_mg: string | null
+  // nutrients has no dedicated sodium column (unlike meals) — TFDA sodium lives in
+  // optional_nutrients, a jsonb map keyed by the original Chinese column label.
+  optional_nutrients: Record<string, number | null> | null
 }
+
+const SODIUM_KEY = '鈉（mg）'
 
 // AI candidates carry the model's own calorie/macro guesses. This replaces the macro
 // *composition* with the matched TFDA food's real per-100g ratios, using the AI's own
@@ -21,7 +25,7 @@ export interface NutrientRow {
 // their confidence capped so the UI can flag them as unverified.
 export async function enrichMealAnalysisWithNutrients(result: MealAnalysisResult, sql: Sql): Promise<MealAnalysisResult> {
   const rows = await sql<NutrientRow[]>`
-    select sample_id, name, aliases, calories_kcal, protein_g, fat_g, carbs_g, fiber_g, sodium_mg
+    select sample_id, name, aliases, calories_kcal, protein_g, fat_g, carbs_g, fiber_g, optional_nutrients
     from nutrients
   `
   if (!rows.length) return result
@@ -54,7 +58,7 @@ export function matchCandidate(candidate: MealCandidate, pool: FoodMatchCandidat
       fatG: scale(numberOrNull(nutrient.fat_g)),
       carbsG: scale(numberOrNull(nutrient.carbs_g)),
       fiberG: scale(numberOrNull(nutrient.fiber_g)),
-      sodiumMg: scale(numberOrNull(nutrient.sodium_mg))
+      sodiumMg: scale(nutrient.optional_nutrients?.[SODIUM_KEY] ?? null)
     }
   }
 }

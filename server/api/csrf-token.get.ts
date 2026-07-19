@@ -4,7 +4,7 @@ export default defineEventHandler((event) => {
   const token = randomBytes(32).toString('base64url')
   setCookie(event, 'food_csrf', token, {
     httpOnly: false,
-    secure: !import.meta.dev,
+    secure: useSecureCookies(),
     sameSite: 'strict',
     path: '/',
     maxAge: 60 * 60 * 2
