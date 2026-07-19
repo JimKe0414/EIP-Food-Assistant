@@ -29,6 +29,12 @@ export default defineEventHandler((event) => {
       "default-src 'self'",
       `script-src ${scriptSrc.join(' ')}`,
       `style-src 'self' 'nonce-${nonce}'`,
+      // Vue's :style bindings render as inline style="" attributes, which nonces/hashes
+      // cannot cover (CSP only allows nonce/hash for <style> elements, not style
+      // attributes, unless the separate 'unsafe-hashes' keyword is present — impractical
+      // here since these values are dynamic). style-src-attr is scoped to attributes only,
+      // so this does not weaken the nonce-gated style-src (elements) or script-src at all.
+      "style-src-attr 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
       connectSrc,
