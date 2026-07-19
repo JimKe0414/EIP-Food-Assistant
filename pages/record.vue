@@ -24,7 +24,7 @@ async function saved(payload?: MealInput) {
       await post('/api/meals', payload)
       const count = Number(localStorage.getItem('food:meal-count') ?? 0) + 1
       localStorage.setItem('food:meal-count', String(count))
-      notify('餐食已加入今日紀錄')
+      notify(payload.summary ? `餐食已加入今日紀錄：${payload.summary}` : '餐食已加入今日紀錄')
     }
   } catch {
     notify('儲存失敗，請先登入或稍後再試')

@@ -9,17 +9,21 @@ const content = ref('')
 const loading = ref(false)
 const error = ref('')
 const candidates = ref<MealCandidate[]>([])
+const summary = ref<string | null>(null)
 const { analyzeText } = useApi()
 
 async function analyze() {
   error.value = ''
   if (!navigator.onLine) {
     candidates.value = [{ name: content.value, portionDescription: null, confidence: 1, nutrients: { caloriesKcal: 0, proteinG: null, fatG: null, carbsG: null, fiberG: null, sodiumMg: null } }]
+    summary.value = null
     return
   }
   loading.value = true
   try {
-    candidates.value = (await analyzeText(content.value)).candidates
+    const result = await analyzeText(content.value)
+    candidates.value = result.candidates
+    summary.value = result.summary
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : '分析失敗，請確認已登入後再試一次'
   } finally {
@@ -35,10 +39,12 @@ function confirm(candidate: MealCandidate) {
     name: candidate.name,
     confidence: candidate.confidence,
     confirmed: true,
-    nutrients: candidate.nutrients
+    nutrients: candidate.nutrients,
+    summary: summary.value
   })
   content.value = ''
   candidates.value = []
+  summary.value = null
 }
 </script>
 

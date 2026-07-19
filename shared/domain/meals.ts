@@ -8,7 +8,8 @@ export const mealInputSchema = z.object({
   name: z.string().trim().min(1).max(160),
   confidence: z.number().min(0).max(1).nullable().optional(),
   confirmed: z.literal(true),
-  nutrients: nutrientSummarySchema
+  nutrients: nutrientSummarySchema,
+  summary: z.string().trim().max(500).nullable().optional().default(null)
 })
 
 export const mealAnalysisInputSchema = z.object({

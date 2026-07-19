@@ -3,6 +3,7 @@ import postgres from 'postgres'
 import { AiProviderError } from '../shared/domain/ai'
 import { AI_QUEUE, TFDA_QUEUE, aiJobSchema } from '../shared/domain/jobs'
 import { aiConfigurationFromEnv, createAiProvider, validateAiConfiguration } from '../server/services/ai'
+import { enrichMealAnalysisWithNutrients } from '../server/services/meals/nutrient-match'
 
 const connectionString = process.env.DATABASE_URL
 if (!connectionString) throw new Error('DATABASE_URL is required')
@@ -30,7 +31,7 @@ await boss.work(AI_QUEUE, { batchSize: 1, localConcurrency: 1 }, async ([job]) =
   try {
     const provider = createAiProvider(aiConfig, purpose)
     let output: object
-    if (task.type === 'analyzeMeal') output = await provider.analyzeMeal(task.input)
+    if (task.type === 'analyzeMeal') output = await enrichMealAnalysisWithNutrients(await provider.analyzeMeal(task.input), sql)
     else if (task.type === 'transcribeMeal') output = await provider.transcribeMeal(Buffer.from(task.audioBase64, 'base64'), task.mimeType)
     else output = await provider.recommendLunch(task.context)
 

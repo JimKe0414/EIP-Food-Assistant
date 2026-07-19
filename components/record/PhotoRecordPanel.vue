@@ -8,6 +8,7 @@ const previewName = ref('')
 const dragging = ref(false)
 const selectedFile = ref<File | null>(null)
 const candidates = ref<MealCandidate[]>([])
+const summary = ref<string | null>(null)
 const loading = ref(false)
 const error = ref('')
 const { analyzeImage } = useApi()
@@ -42,7 +43,9 @@ async function analyze() {
   loading.value = true
   error.value = ''
   try {
-    candidates.value = (await analyzeImage(await fileToBase64(selectedFile.value), selectedFile.value.type)).candidates
+    const result = await analyzeImage(await fileToBase64(selectedFile.value), selectedFile.value.type)
+    candidates.value = result.candidates
+    summary.value = result.summary
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : '照片分析失敗'
   } finally {
@@ -53,9 +56,11 @@ async function analyze() {
 function confirm(candidate: MealCandidate) {
   emit('saved', {
     mealDate: new Date().toISOString().slice(0, 10), mealType: 'lunch', source: 'photo',
-    name: candidate.name, confidence: candidate.confidence, confirmed: true, nutrients: candidate.nutrients
+    name: candidate.name, confidence: candidate.confidence, confirmed: true, nutrients: candidate.nutrients,
+    summary: summary.value
   })
   candidates.value = []
+  summary.value = null
 }
 </script>
 

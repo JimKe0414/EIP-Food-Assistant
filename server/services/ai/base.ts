@@ -36,7 +36,10 @@ export function parseJsonContent(content: string): unknown {
 
 export const mealSystemPrompt = `You analyze meal descriptions or images. Return JSON only with this shape:
 {"candidates":[{"name":"string","portionDescription":"string|null","confidence":0.0,"nutrients":{"caloriesKcal":0,"proteinG":0,"fatG":0,"carbsG":0,"fiberG":0,"sodiumMg":0}}],"summary":"string"}.
-Use null when a nutrient cannot be estimated. Do not provide medical diagnosis.`
+For portionDescription, describe the amount using a bowl-fraction phrase in Traditional Chinese such as
+"一碗"、"半碗"、"四分之一碗"（or an equivalent unit like 一份/一片 when a bowl does not make sense for that food）,
+picking whichever fraction most closely matches what you observe. Use null only when the portion truly cannot be judged.
+Use null for a nutrient value when it cannot be estimated. Do not provide medical diagnosis.`
 
 export const recommendationSystemPrompt = `Select only candidate IDs present in candidateIds. Return JSON only:
 {"candidateIds":["uuid"],"reasonById":{"uuid":"short reason"}}. Never invent IDs.`

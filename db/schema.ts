@@ -56,6 +56,7 @@ export const meals = pgTable('meals', {
   fiberG: numeric('fiber_g', { precision: 7, scale: 2 }),
   sodiumMg: numeric('sodium_mg', { precision: 9, scale: 2 }),
   confidence: numeric('confidence', { precision: 4, scale: 3 }),
+  summary: varchar('summary', { length: 500 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, table => [index('meals_user_date_idx').on(table.userId, table.mealDate)])
 

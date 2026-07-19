@@ -8,6 +8,7 @@ const transcript = ref('')
 const loading = ref(false)
 const error = ref('')
 const candidates = ref<MealCandidate[]>([])
+const summary = ref<string | null>(null)
 const { transcribeAudio, analyzeText } = useApi()
 let recorder: MediaRecorder | undefined
 let stream: MediaStream | undefined
@@ -40,7 +41,9 @@ async function analyzeRecording() {
     const blob = new Blob(chunks, { type: recorder?.mimeType || 'audio/webm' })
     const result = await transcribeAudio(await fileToBase64(blob), blob.type)
     transcript.value = result.text
-    candidates.value = (await analyzeText(result.text)).candidates
+    const analysis = await analyzeText(result.text)
+    candidates.value = analysis.candidates
+    summary.value = analysis.summary
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : '語音分析失敗'
   } finally { loading.value = false }
@@ -49,9 +52,11 @@ async function analyzeRecording() {
 function confirm(candidate: MealCandidate) {
   emit('saved', {
     mealDate: new Date().toISOString().slice(0, 10), mealType: 'lunch', source: 'voice',
-    name: candidate.name, confidence: candidate.confidence, confirmed: true, nutrients: candidate.nutrients
+    name: candidate.name, confidence: candidate.confidence, confirmed: true, nutrients: candidate.nutrients,
+    summary: summary.value
   })
   candidates.value = []
+  summary.value = null
 }
 
 onBeforeUnmount(() => stream?.getTracks().forEach(track => track.stop()))

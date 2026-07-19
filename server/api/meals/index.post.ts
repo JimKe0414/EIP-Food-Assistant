@@ -16,7 +16,8 @@ export default defineEventHandler(async (event) => {
     carbsG: nullableNumber(input.nutrients.carbsG),
     fiberG: nullableNumber(input.nutrients.fiberG),
     sodiumMg: nullableNumber(input.nutrients.sodiumMg),
-    confidence: input.confidence == null ? null : String(input.confidence)
+    confidence: input.confidence == null ? null : String(input.confidence),
+    summary: input.summary ?? null
   }).returning())
   setResponseStatus(event, 201)
   return { meal }
