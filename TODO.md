@@ -1,6 +1,6 @@
 # TODO — 本機驗證與功能開發進度
 
-> 最後更新 2026-07-19 晚上。給明天接續用,也給隊友看目前狀態。
+> 最後更新 2026-07-20。給明天接續用,也給隊友看目前狀態。
 
 ## 分支與 push 狀態
 
@@ -9,7 +9,8 @@
 - 這個 GitHub 帳號（Louis06719）對原始 repo（`JimKe0414/EIP-Food-Assistant`，git remote 叫 `origin`）**沒有寫入權限**，push 會 403
 - 已改推到自己的 fork：git remote 叫 `fork`，指向 `https://github.com/Louis06719/EIP-Food-Assistant`，分支已經推上去了
 - 之後拿到 collaborator 權限，直接 `git push origin feature/meal-recording-nutrition-db` 即可，兩個 remote 不衝突
-- 目前 5 個 commit：TFDA 解析器/功能串接 → Docker 環境三個 bug 修復 → CSP inline style 修復 → Qwen provider 設定準備
+- 目前 8 個 commit：TFDA 解析器/功能串接 → Docker 環境三個 bug 修復 → CSP inline style 修復 → Qwen provider 設定準備 → TODO.md 補回來 → migration 檔案換行符修正（`.gitattributes`）
+- ⚠️ 這幾個 commit 除了最早 push 的那批，**還沒 push 上 fork**，之後記得補推
 
 ## 本機執行方式
 
@@ -35,6 +36,8 @@
 - ✅ 語音輸入整條機制驗證可動（麥克風錄音 → 上傳 → 轉錄 job → 分析 job → 候選卡片 → 確認存檔），內容是 stub 假資料（`AI_AUDIO_PROVIDER=stub` 本來就不會真的聽你說什麼，這是預期行為）
 - ✅ CSP 行內 style 屬性放行（`style-src-attr 'unsafe-inline'`，只影響屬性層級，不影響 `<style>` 標籤的 nonce 或 script-src）
 - ✅ 準備好公司測試環境用的雲端 Qwen provider 設定（見下一節），還沒啟用
+- ✅ **真的用本機 Ollama 跑完一次完整分析**（不是 stub）：文字輸入「雞胸肉便當，飯半碗，燙青菜一份」→ `qwen2.5:7b` 在 ~18 秒內回傳結構化 JSON，`portionDescription` 正確帶出「一碗」這種份量用詞（prompt 調整有生效）。模型辨識結果本身不準（猜成「牛肉麵」）是模型能力問題，不是程式碼 bug——本機用的是 7B 小模型，跟公司正式環境的 35B 差很多，預期之內
+- ✅ 修好 migration 檔案的換行符問題：Windows `core.autocrlf` 把 `db/migrations/0001_add_meal_summary.sql` 從 LF 轉成 CRLF，導致 `scripts/migrate.mjs` 的 checksum 校驗失敗、`docker compose up` 卡在 migrate 這步。已手動校正資料庫記錄的 checksum，並加 `.gitattributes` 鎖住 `db/migrations/*.sql` 用 LF，避免以後再發生
 
 ## AI Provider：公司測試環境的雲端 Qwen（準備好了，還沒啟用）
 
@@ -43,7 +46,9 @@
 - `OPENAI_COMPAT_BASE_URL=https://api.focusit.tw/openai/v1`
 - 兩個模型：`Qwen3.6-35B-A3B-fast`（一般用）／`Qwen3.6-35B-A3B-thinking`（複雜任務，`OPENAI_COMPAT_MAX_TOKENS` 要 ≥ 4000，已經加進 provider 程式碼會自動帶進 request body）
 - `.env` 的 `OPENAI_COMPAT_API_KEY` 現在是隨機佔位字串。等真的 key 補上，且把 `AI_EGRESS_MODE` 改成 `cloud-approved`、`AI_TEXT_PROVIDER`/`AI_VISION_PROVIDER` 改成 `openai-compatible`，才會真的切過去用（`server/services/ai/index.ts` 的 `validateAiConfiguration()` 會擋住 egress mode 沒開就用雲端 provider 的情況）
-- 本機開發資源應該不夠跑 35B 模型，計畫改用 Ollama 跑同系列 Qwen 的低精度版本本地測試，跟公司雲端環境分開（`OLLAMA_BASE_URL` 記得用 `http://host.docker.internal:11434`，不是 `localhost`，因為 worker 跑在容器裡）
+- 本機開發資源不夠跑 35B 模型，改用 Ollama 跑同系列 Qwen 的低精度版本本地測試，跟公司雲端環境分開（`OLLAMA_BASE_URL` 記得用 `http://host.docker.internal:11434`，不是 `localhost`，因為 worker 跑在容器裡）
+- 本機已裝三顆 Qwen 模型：`qwen2.5:7b`、`qwen2.5:14b`、`qwen3.5:9b`，**目前 `.env` 用 `qwen2.5:7b`**（`qwen3.5:9b` 是會先長篇思考才回答的「thinking」模型，目前 `ollama.ts`/`openai-compatible.ts` 寫死 30 秒逾時，撐不到它想完，會逾時失敗兩次後正式失敗——這跟公司要用的 `-thinking` 模型是同一類問題，逾時時間之後要一起調大，不要只用一個寫死的 30 秒常數）
+- 三個模型都只有文字能力，沒有視覺（圖片辨識），`AI_VISION_PROVIDER` 目前還是留 `stub`
 
 ## 已知問題，還沒處理
 
@@ -55,8 +60,9 @@
 
 ## 接下來（依 [FEATURE-PLAN.md](FEATURE-PLAN.md) 分期）
 
-- [ ] 上傳 xlsx 到 `/api/tfda/sync`，確認同步成功、`nutrients` 表有資料
-- [ ] 接上 Ollama 本地測試（`.env` 的 `AI_TEXT_MODEL`/`AI_VISION_MODEL` 已填好，Docker 環境下 `OLLAMA_BASE_URL` 要用 `host.docker.internal`）
+- [ ] 把這次的新 commit push 到 fork
+- [ ] 上傳 xlsx 到 `/api/tfda/sync`，確認同步成功、`nutrients` 表有資料（目前測試都會走「比對不到」的 fallback，因為表是空的）
+- [ ] 把 `ollama.ts`/`openai-compatible.ts` 寫死的 30 秒逾時改成可設定、拉長，讓 thinking 類模型（本機 `qwen3.5:9b`、公司的 `-thinking`）跑得完
 - [ ] 拿到公司真的 API key 後，測試雲端 Qwen provider
 - [ ] 第二期：拍照辨識的份量範圍選擇 UI（一碗/半碗/四分之一碗）
 - [ ] 全頁面走一輪，確認畫面跟 Console 都乾淨
