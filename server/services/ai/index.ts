@@ -24,6 +24,7 @@ export interface AiConfiguration {
   openAiTextModel: string
   openAiVisionModel: string
   openAiAudioModel: string
+  openAiMaxTokens: number | undefined
   googleApiKey: string
   googleTextModel: string
   googleVisionModel: string
@@ -56,7 +57,8 @@ export function createAiProvider(config: AiConfiguration, purpose: ProviderPurpo
       apiKey: config.openAiApiKey,
       textModel: config.openAiTextModel || config.textModel,
       visionModel: config.openAiVisionModel || config.visionModel,
-      audioModel: config.openAiAudioModel || config.audioModel
+      audioModel: config.openAiAudioModel || config.audioModel,
+      maxTokens: config.openAiMaxTokens
     })
     case 'google-genai': return new GoogleGenAiProvider({
       apiKey: config.googleApiKey,
@@ -83,6 +85,7 @@ export function aiConfigurationFromEnv(env: NodeJS.ProcessEnv = process.env): Ai
     openAiTextModel: env.OPENAI_COMPAT_TEXT_MODEL || '',
     openAiVisionModel: env.OPENAI_COMPAT_VISION_MODEL || '',
     openAiAudioModel: env.OPENAI_COMPAT_AUDIO_MODEL || '',
+    openAiMaxTokens: env.OPENAI_COMPAT_MAX_TOKENS ? Number(env.OPENAI_COMPAT_MAX_TOKENS) : undefined,
     googleApiKey: secretValue('google_genai_api_key', env.GOOGLE_GENAI_API_KEY),
     googleTextModel: env.GOOGLE_GENAI_TEXT_MODEL || 'gemini-2.5-flash',
     googleVisionModel: env.GOOGLE_GENAI_VISION_MODEL || 'gemini-2.5-flash',

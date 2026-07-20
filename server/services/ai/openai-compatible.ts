@@ -14,6 +14,10 @@ interface OpenAiCompatibleOptions {
   textModel: string
   visionModel: string
   audioModel: string
+  // Some models (e.g. Qwen's "thinking" variants) spend a chunk of the token budget on
+  // chain-of-thought before the final answer; a low/unset max_tokens can cut them off
+  // before they produce a usable response.
+  maxTokens?: number
 }
 
 export class OpenAiCompatibleProvider implements AiProvider {
@@ -53,7 +57,12 @@ export class OpenAiCompatibleProvider implements AiProvider {
       {
         method: 'POST',
         headers: this.authHeaders(true),
-        body: JSON.stringify({ model, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: system }, { role: 'user', content }] })
+        body: JSON.stringify({
+          model,
+          response_format: { type: 'json_object' },
+          messages: [{ role: 'system', content: system }, { role: 'user', content }],
+          ...(this.options.maxTokens ? { max_tokens: this.options.maxTokens } : {})
+        })
       },
       timeoutMs,
       async response => String((await response.json() as { choices?: { message?: { content?: string } }[] }).choices?.[0]?.message?.content ?? '')
