@@ -155,6 +155,22 @@ export const mealImportBatches = pgTable('meal_import_batches', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, table => [index('meal_import_batches_user_idx').on(table.userId)])
 
+// Tracks food names the AI produced that either matched nothing in `nutrients`, or only
+// matched weakly (findBestFoodMatch found something, but the name is different enough that
+// it's likely the wrong dish — e.g. "炒麵" force-matching to "意麵"). TFDA catalogs raw
+// ingredients, not composite dishes, so this is expected to happen; the point is to build a
+// prioritized worklist of what to add to the database next, not to block the analysis.
+export const nutrientMatchGaps = pgTable('nutrient_match_gaps', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  queryName: varchar('query_name', { length: 160 }).notNull(),
+  matchedSampleId: varchar('matched_sample_id', { length: 32 }),
+  matchedName: varchar('matched_name', { length: 200 }),
+  score: numeric('score', { precision: 4, scale: 3 }),
+  occurrences: integer('occurrences').notNull().default(1),
+  firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow()
+}, table => [uniqueIndex('nutrient_match_gaps_query_name_uidx').on(table.queryName)])
+
 export const aiAuditEvents = pgTable('ai_audit_events', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),

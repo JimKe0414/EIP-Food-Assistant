@@ -16,7 +16,17 @@ export interface NutrientRow {
   optional_nutrients: Record<string, number | null> | null
 }
 
+export interface MatchOutcome {
+  candidate: MealCandidate
+  // null candidate/score means findBestFoodMatch found nothing at all; a non-null one below
+  // STRONG_MATCH_SCORE means it matched *something*, but loosely enough to be worth a human
+  // double-checking (TFDA catalogs raw ingredients, not composite dishes, so e.g. "炒麵"
+  // force-matching to "意麵" is expected, not a bug).
+  gap: { matchedSampleId: string | null, matchedName: string | null, score: number | null } | null
+}
+
 const SODIUM_KEY = '鈉（mg）'
+const STRONG_MATCH_SCORE = 0.75
 
 // AI candidates carry the model's own calorie/macro guesses. This replaces the macro
 // *composition* with the matched TFDA food's real per-100g ratios, using the AI's own
@@ -33,33 +43,62 @@ export async function enrichMealAnalysisWithNutrients(result: MealAnalysisResult
   const pool: FoodMatchCandidate[] = rows.map(row => ({ id: row.sample_id, name: row.name, aliases: row.aliases }))
   const byId = new Map(rows.map(row => [row.sample_id, row]))
 
-  return { ...result, candidates: result.candidates.map(candidate => matchCandidate(candidate, pool, byId)) }
+  const outcomes = result.candidates.map(candidate => matchCandidate(candidate, pool, byId))
+  await recordGaps(sql, outcomes)
+  return { ...result, candidates: outcomes.map(outcome => outcome.candidate) }
 }
 
-export function matchCandidate(candidate: MealCandidate, pool: FoodMatchCandidate[], byId: Map<string, NutrientRow>): MealCandidate {
-  const unverified = () => ({ ...candidate, confidence: Math.min(candidate.confidence, 0.5) })
+async function recordGaps(sql: Sql, outcomes: MatchOutcome[]) {
+  for (const outcome of outcomes) {
+    if (!outcome.gap) continue
+    await sql`
+      insert into nutrient_match_gaps (query_name, matched_sample_id, matched_name, score)
+      values (${outcome.candidate.name}, ${outcome.gap.matchedSampleId}, ${outcome.gap.matchedName}, ${outcome.gap.score})
+      on conflict (query_name) do update set
+        occurrences = nutrient_match_gaps.occurrences + 1,
+        matched_sample_id = excluded.matched_sample_id,
+        matched_name = excluded.matched_name,
+        score = excluded.score,
+        last_seen_at = now()
+    `.catch(error => console.error('[nutrient-match] failed to record gap', error))
+  }
+}
+
+export function matchCandidate(candidate: MealCandidate, pool: FoodMatchCandidate[], byId: Map<string, NutrientRow>): MatchOutcome {
+  const unverified = (gap: MatchOutcome['gap']): MatchOutcome => ({
+    candidate: { ...candidate, confidence: Math.min(candidate.confidence, 0.5) },
+    gap
+  })
 
   const match = findBestFoodMatch(candidate.name, pool)
-  if (!match) return unverified()
+  if (!match) return unverified({ matchedSampleId: null, matchedName: null, score: null })
 
   const nutrient = byId.get(match.candidate.id)
   const caloriesPer100g = numberOrNull(nutrient?.calories_kcal)
   const aiCalories = candidate.nutrients.caloriesKcal
-  if (!nutrient || !caloriesPer100g || caloriesPer100g <= 0 || !Number.isFinite(aiCalories) || aiCalories <= 0) return unverified()
+  const gap = match.score < STRONG_MATCH_SCORE
+    ? { matchedSampleId: match.candidate.id, matchedName: match.candidate.name, score: round(match.score) }
+    : null
+  if (!nutrient || !caloriesPer100g || caloriesPer100g <= 0 || !Number.isFinite(aiCalories) || aiCalories <= 0) {
+    return unverified(gap)
+  }
 
   const estimatedGrams = aiCalories / caloriesPer100g * 100
   const scale = (perHundredGram: number | null) => perHundredGram === null ? null : round(perHundredGram * estimatedGrams / 100)
 
   return {
-    ...candidate,
-    nutrients: {
-      caloriesKcal: aiCalories,
-      proteinG: scale(numberOrNull(nutrient.protein_g)),
-      fatG: scale(numberOrNull(nutrient.fat_g)),
-      carbsG: scale(numberOrNull(nutrient.carbs_g)),
-      fiberG: scale(numberOrNull(nutrient.fiber_g)),
-      sodiumMg: scale(nutrient.optional_nutrients?.[SODIUM_KEY] ?? null)
-    }
+    candidate: {
+      ...candidate,
+      nutrients: {
+        caloriesKcal: aiCalories,
+        proteinG: scale(numberOrNull(nutrient.protein_g)),
+        fatG: scale(numberOrNull(nutrient.fat_g)),
+        carbsG: scale(numberOrNull(nutrient.carbs_g)),
+        fiberG: scale(numberOrNull(nutrient.fiber_g)),
+        sodiumMg: scale(nutrient.optional_nutrients?.[SODIUM_KEY] ?? null)
+      }
+    },
+    gap
   }
 }
 
