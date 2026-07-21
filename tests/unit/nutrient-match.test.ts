@@ -19,18 +19,27 @@ const byId = new Map<string, NutrientRow>([
 
 function candidate(overrides: Partial<MealCandidate> = {}): MealCandidate {
   return {
-    name: '白飯', portionDescription: null, confidence: 0.9,
+    name: '白飯', portionDescription: null, estimatedGrams: null, confidence: 0.9,
     nutrients: { caloriesKcal: 366, proteinG: 20, fatG: 20, carbsG: 20, fiberG: null, sodiumMg: null },
     ...overrides
   }
 }
 
 describe('matchCandidate', () => {
-  it('replaces AI-guessed macros with TFDA ratios scaled by the AI calorie estimate, no gap on a strong match', () => {
+  it('prefers the AI-provided estimatedGrams over back-deriving it from the calorie guess', () => {
+    // AI's calorie guess (400) is inconsistent with its own grams guess (200 @ 183kcal/100g
+    // = 366) — the grams estimate should win, not get overridden by the calorie guess.
+    const result = matchCandidate(candidate({ estimatedGrams: 200, nutrients: { ...candidate().nutrients, caloriesKcal: 400 } }), pool, byId)
+    expect(result.candidate.estimatedGrams).toBe(200)
+    expect(result.candidate.nutrients).toEqual({ caloriesKcal: 366, proteinG: 6.2, fatG: 0.6, carbsG: 82.4, fiberG: 1.2, sodiumMg: 4 })
+    expect(result.gap).toBeNull()
+  })
+
+  it('falls back to deriving grams from the calorie guess when the AI gives no estimatedGrams', () => {
     const result = matchCandidate(candidate(), pool, byId)
     // 366 kcal AI guess / 183 kcal per 100g = estimated 200g portion
+    expect(result.candidate.estimatedGrams).toBe(200)
     expect(result.candidate.nutrients).toEqual({ caloriesKcal: 366, proteinG: 6.2, fatG: 0.6, carbsG: 82.4, fiberG: 1.2, sodiumMg: 4 })
-    expect(result.candidate.confidence).toBe(0.9)
     expect(result.gap).toBeNull()
   })
 
@@ -41,14 +50,14 @@ describe('matchCandidate', () => {
     expect(result.gap).toEqual({ matchedSampleId: null, matchedName: null, score: null })
   })
 
-  it('falls back to the AI guess when the AI calorie estimate is zero (still no gap, food itself matched)', () => {
+  it('falls back to the AI guess when neither estimatedGrams nor a usable calorie guess exists', () => {
     const result = matchCandidate(candidate({ nutrients: { caloriesKcal: 0, proteinG: null, fatG: null, carbsG: null, fiberG: null, sodiumMg: null } }), pool, byId)
     expect(result.candidate.confidence).toBeLessThanOrEqual(0.5)
     expect(result.gap).toBeNull()
   })
 
   it('records a gap for a weak match, using it anyway (composite dish force-matched to a raw ingredient)', () => {
-    const result = matchCandidate(candidate({ name: '炒麵', nutrients: { ...candidate().nutrients, caloriesKcal: 289 } }), pool, byId)
+    const result = matchCandidate(candidate({ name: '炒麵', estimatedGrams: 100 }), pool, byId)
     expect(result.candidate.nutrients.caloriesKcal).toBe(289)
     expect(result.gap).toMatchObject({ matchedSampleId: 'A002', matchedName: '意麵' })
     expect(result.gap?.score).toBeLessThan(0.75)

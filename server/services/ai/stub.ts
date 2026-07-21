@@ -14,6 +14,7 @@ export class StubAiProvider implements AiProvider {
       candidates: [{
         name,
         portionDescription: '一份',
+        estimatedGrams: 350,
         confidence: 0.9,
         nutrients: { caloriesKcal: 520, proteinG: 30, fatG: 18, carbsG: 55, fiberG: 6, sodiumMg: 680 }
       }],

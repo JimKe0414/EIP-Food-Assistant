@@ -12,7 +12,7 @@ const summary = ref<string | null>(null)
 const loading = ref(false)
 const error = ref('')
 const { analyzeImage } = useApi()
-const { multiplierFor, setMultiplier, reset: resetPortions } = usePortionAdjustment()
+const { multiplierFor, setMultiplier, gramsInputFor, setGrams, reset: resetPortions } = usePortionAdjustment()
 
 function selectFile(file?: File) {
   if (!file || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
@@ -101,6 +101,16 @@ function confirm(candidate: MealCandidate) {
             :class="{ active: multiplierFor(candidate.name) === option.value }"
             @click="setMultiplier(candidate.name, option.value)"
           >{{ option.label }}</button>
+        </div>
+        <div v-if="candidate.estimatedGrams" class="portion-grams">
+          <label>或直接輸入克數（AI 估計 {{ candidate.estimatedGrams }} 克）
+            <input
+              type="number" min="1" inputmode="numeric"
+              :value="gramsInputFor(candidate.name)"
+              placeholder="克"
+              @input="setGrams(candidate.name, ($event.target as HTMLInputElement).value, candidate.estimatedGrams)"
+            >
+          </label>
         </div>
         <div class="nutrition-grid"><div><span>熱量</span><b>{{ scaleNutrients(candidate.nutrients, multiplierFor(candidate.name)).caloriesKcal }}</b></div><div><span>蛋白質</span><b>{{ scaleNutrients(candidate.nutrients, multiplierFor(candidate.name)).proteinG ?? '—' }} g</b></div><div><span>碳水</span><b>{{ scaleNutrients(candidate.nutrients, multiplierFor(candidate.name)).carbsG ?? '—' }} g</b></div><div><span>脂肪</span><b>{{ scaleNutrients(candidate.nutrients, multiplierFor(candidate.name)).fatG ?? '—' }} g</b></div></div>
         <button type="button" class="button button--primary button--wide" @click="confirm(candidate)">確認並儲存本餐</button>

@@ -28,11 +28,12 @@ export interface MatchOutcome {
 const SODIUM_KEY = '鈉（mg）'
 const STRONG_MATCH_SCORE = 0.75
 
-// AI candidates carry the model's own calorie/macro guesses. This replaces the macro
-// *composition* with the matched TFDA food's real per-100g ratios, using the AI's own
-// calorie estimate as the portion signal (there is no structured portion-size input yet —
-// that lands in a later stage). Unmatched candidates are left as pure AI guesses, with
-// their confidence capped so the UI can flag them as unverified.
+// AI candidates carry the model's own calorie/macro/weight guesses. When a food match is
+// found, this replaces ALL nutrient values (including calories) with the matched TFDA
+// food's real per-100g composition scaled by a portion weight — preferring the AI's own
+// gram estimate, falling back to reverse-deriving grams from its calorie guess if it didn't
+// give one. Unmatched candidates are left as pure AI guesses, with their confidence capped
+// so the UI can flag them as unverified.
 export async function enrichMealAnalysisWithNutrients(result: MealAnalysisResult, sql: Sql): Promise<MealAnalysisResult> {
   const rows = await sql<NutrientRow[]>`
     select sample_id, name, aliases, calories_kcal, protein_g, fat_g, carbs_g, fiber_g, optional_nutrients
@@ -75,22 +76,28 @@ export function matchCandidate(candidate: MealCandidate, pool: FoodMatchCandidat
 
   const nutrient = byId.get(match.candidate.id)
   const caloriesPer100g = numberOrNull(nutrient?.calories_kcal)
-  const aiCalories = candidate.nutrients.caloriesKcal
   const gap = match.score < STRONG_MATCH_SCORE
     ? { matchedSampleId: match.candidate.id, matchedName: match.candidate.name, score: round(match.score) }
     : null
-  if (!nutrient || !caloriesPer100g || caloriesPer100g <= 0 || !Number.isFinite(aiCalories) || aiCalories <= 0) {
-    return unverified(gap)
-  }
+  if (!nutrient || !caloriesPer100g || caloriesPer100g <= 0) return unverified(gap)
 
-  const estimatedGrams = aiCalories / caloriesPer100g * 100
+  // Prefer the AI's own weight estimate — it's a direct judgment, not a number reverse-
+  // engineered from a possibly-unrelated calorie guess. Only back-calculate from calories
+  // when the model didn't give one (older prompt/provider, or it genuinely couldn't judge).
+  const aiCalories = candidate.nutrients.caloriesKcal
+  const estimatedGrams = candidate.estimatedGrams && candidate.estimatedGrams > 0
+    ? candidate.estimatedGrams
+    : Number.isFinite(aiCalories) && aiCalories > 0 ? aiCalories / caloriesPer100g * 100 : null
+  if (estimatedGrams === null) return unverified(gap)
+
   const scale = (perHundredGram: number | null) => perHundredGram === null ? null : round(perHundredGram * estimatedGrams / 100)
 
   return {
     candidate: {
       ...candidate,
+      estimatedGrams: round(estimatedGrams),
       nutrients: {
-        caloriesKcal: aiCalories,
+        caloriesKcal: scale(caloriesPer100g) ?? 0,
         proteinG: scale(numberOrNull(nutrient.protein_g)),
         fatG: scale(numberOrNull(nutrient.fat_g)),
         carbsG: scale(numberOrNull(nutrient.carbs_g)),

@@ -11,13 +11,13 @@ const error = ref('')
 const candidates = ref<MealCandidate[]>([])
 const summary = ref<string | null>(null)
 const { analyzeText } = useApi()
-const { multiplierFor, setMultiplier, reset: resetPortions } = usePortionAdjustment()
+const { multiplierFor, setMultiplier, gramsInputFor, setGrams, reset: resetPortions } = usePortionAdjustment()
 
 async function analyze() {
   error.value = ''
   resetPortions()
   if (!navigator.onLine) {
-    candidates.value = [{ name: content.value, portionDescription: null, confidence: 1, nutrients: { caloriesKcal: 0, proteinG: null, fatG: null, carbsG: null, fiberG: null, sodiumMg: null } }]
+    candidates.value = [{ name: content.value, portionDescription: null, estimatedGrams: null, confidence: 1, nutrients: { caloriesKcal: 0, proteinG: null, fatG: null, carbsG: null, fiberG: null, sodiumMg: null } }]
     summary.value = null
     return
   }
@@ -76,6 +76,16 @@ function confirm(candidate: MealCandidate) {
             :class="{ active: multiplierFor(candidate.name) === option.value }"
             @click="setMultiplier(candidate.name, option.value)"
           >{{ option.label }}</button>
+        </div>
+        <div v-if="candidate.estimatedGrams" class="portion-grams">
+          <label>或直接輸入克數（AI 估計 {{ candidate.estimatedGrams }} 克）
+            <input
+              type="number" min="1" inputmode="numeric"
+              :value="gramsInputFor(candidate.name)"
+              placeholder="克"
+              @input="setGrams(candidate.name, ($event.target as HTMLInputElement).value, candidate.estimatedGrams)"
+            >
+          </label>
         </div>
       </article>
     </section>

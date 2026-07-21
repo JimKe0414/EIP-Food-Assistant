@@ -12,6 +12,10 @@ export const nutrientSummarySchema = z.object({
 export const mealCandidateSchema = z.object({
   name: z.string().trim().min(1).max(160),
   portionDescription: z.string().trim().max(200).nullable().default(null),
+  // The AI's own guess at the portion's weight in grams. This is what lets the frontend
+  // scale nutrients by an actual gram amount the user enters, instead of only an abstract
+  // "how many times the AI's serving" multiplier. Null when the model couldn't estimate it.
+  estimatedGrams: z.number().positive().nullable().default(null),
   confidence: z.number().min(0).max(1),
   nutrients: nutrientSummarySchema
 })

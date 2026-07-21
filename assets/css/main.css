@@ -134,6 +134,9 @@ svg { display: block; }
 .portion-select { margin-top: 9px; padding: 4px; display: grid; grid-template-columns: repeat(5,1fr); gap: 4px; border-radius: 12px; background: #e6eeeb; }
 .portion-select button { min-height: 38px; padding: 4px 2px; border: 0; border-radius: 9px; color: var(--muted); background: transparent; font-size: 9px; font-weight: 800; line-height: 1.3; }
 .portion-select button.active { color: var(--primary); background: #fff; box-shadow: 0 4px 10px rgba(21,70,58,.08); }
+.portion-grams { margin-top: 7px; display: flex; align-items: center; gap: 8px; }
+.portion-grams label { flex: 1; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 10px; }
+.portion-grams input { min-height: 36px; width: 76px; padding: 6px 8px; font-size: 11px; font-weight: 800; }
 .detected-food button { width: 36px; height: 36px; border: 0; border-radius: 10px; display: grid; place-items: center; color: var(--primary); background: #fff; }
 .nutrition-grid { margin: 12px 0; display: grid; grid-template-columns: repeat(4,1fr); gap: 7px; }
 .nutrition-grid div { padding: 10px 4px; border-radius: 11px; text-align: center; background: var(--surface-soft); }

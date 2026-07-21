@@ -10,7 +10,7 @@ const error = ref('')
 const candidates = ref<MealCandidate[]>([])
 const summary = ref<string | null>(null)
 const { transcribeAudio, analyzeText } = useApi()
-const { multiplierFor, setMultiplier, reset: resetPortions } = usePortionAdjustment()
+const { multiplierFor, setMultiplier, gramsInputFor, setGrams, reset: resetPortions } = usePortionAdjustment()
 let recorder: MediaRecorder | undefined
 let stream: MediaStream | undefined
 let chunks: Blob[] = []
@@ -91,6 +91,16 @@ onBeforeUnmount(() => stream?.getTracks().forEach(track => track.stop()))
             :class="{ active: multiplierFor(candidate.name) === option.value }"
             @click="setMultiplier(candidate.name, option.value)"
           >{{ option.label }}</button>
+        </div>
+        <div v-if="candidate.estimatedGrams" class="portion-grams">
+          <label>或直接輸入克數（AI 估計 {{ candidate.estimatedGrams }} 克）
+            <input
+              type="number" min="1" inputmode="numeric"
+              :value="gramsInputFor(candidate.name)"
+              placeholder="克"
+              @input="setGrams(candidate.name, ($event.target as HTMLInputElement).value, candidate.estimatedGrams)"
+            >
+          </label>
         </div>
       </article>
     </section>

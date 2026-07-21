@@ -25,6 +25,9 @@ export function scaleNutrients(nutrients: NutrientSummary, factor: number): Nutr
 
 export function usePortionAdjustment() {
   const multipliers = ref<Record<string, number>>({})
+  // Raw text of the gram <input>, kept separate from the derived multiplier so the field
+  // can hold in-progress/invalid typing without fighting the user's cursor.
+  const gramsInputs = ref<Record<string, string>>({})
 
   function multiplierFor(name: string) {
     return multipliers.value[name] ?? 1
@@ -32,11 +35,26 @@ export function usePortionAdjustment() {
 
   function setMultiplier(name: string, value: number) {
     multipliers.value[name] = value
+    gramsInputs.value[name] = ''
+  }
+
+  function gramsInputFor(name: string) {
+    return gramsInputs.value[name] ?? ''
+  }
+
+  // referenceGrams is candidate.estimatedGrams — what the current (pre-scale) nutrients
+  // correspond to. Without it we have no basis to convert a gram amount into a multiplier.
+  function setGrams(name: string, grams: string, referenceGrams: number | null) {
+    gramsInputs.value[name] = grams
+    const parsed = Number(grams)
+    if (!referenceGrams || referenceGrams <= 0 || !Number.isFinite(parsed) || parsed <= 0) return
+    multipliers.value[name] = parsed / referenceGrams
   }
 
   function reset() {
     multipliers.value = {}
+    gramsInputs.value = {}
   }
 
-  return { multiplierFor, setMultiplier, reset }
+  return { multiplierFor, setMultiplier, gramsInputFor, setGrams, reset }
 }
