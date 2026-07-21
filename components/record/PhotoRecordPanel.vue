@@ -12,6 +12,7 @@ const summary = ref<string | null>(null)
 const loading = ref(false)
 const error = ref('')
 const { analyzeImage } = useApi()
+const { multiplierFor, setMultiplier, reset: resetPortions } = usePortionAdjustment()
 
 function selectFile(file?: File) {
   if (!file || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
@@ -25,6 +26,7 @@ function selectFile(file?: File) {
   selectedFile.value = file
   previewName.value = file.name
   candidates.value = []
+  resetPortions()
   error.value = ''
 }
 
@@ -54,13 +56,15 @@ async function analyze() {
 }
 
 function confirm(candidate: MealCandidate) {
+  const factor = multiplierFor(candidate.name)
   emit('saved', {
     mealDate: new Date().toISOString().slice(0, 10), mealType: 'lunch', source: 'photo',
-    name: candidate.name, confidence: candidate.confidence, confirmed: true, nutrients: candidate.nutrients,
+    name: candidate.name, confidence: candidate.confidence, confirmed: true, nutrients: scaleNutrients(candidate.nutrients, factor),
     summary: summary.value
   })
   candidates.value = []
   summary.value = null
+  resetPortions()
 }
 </script>
 
@@ -87,7 +91,18 @@ function confirm(candidate: MealCandidate) {
       <div class="analysis-card__head"><h2>候選清單</h2><span>請確認或修正</span></div>
       <article v-for="candidate in candidates" :key="candidate.name" class="candidate-result">
         <div class="detected-food"><Icon name="solar:check-circle-linear" /><div><input v-model="candidate.name" aria-label="候選餐點名稱"><span>可信度 {{ Math.round(candidate.confidence * 100) }}%</span></div></div>
-        <div class="nutrition-grid"><div><span>熱量</span><b>{{ candidate.nutrients.caloriesKcal }}</b></div><div><span>蛋白質</span><b>{{ candidate.nutrients.proteinG ?? '—' }} g</b></div><div><span>碳水</span><b>{{ candidate.nutrients.carbsG ?? '—' }} g</b></div><div><span>脂肪</span><b>{{ candidate.nutrients.fatG ?? '—' }} g</b></div></div>
+        <div class="portion-select" role="radiogroup" :aria-label="`${candidate.name} 份量調整`">
+          <button
+            v-for="option in portionMultiplierOptions"
+            :key="option.value"
+            type="button"
+            role="radio"
+            :aria-checked="multiplierFor(candidate.name) === option.value"
+            :class="{ active: multiplierFor(candidate.name) === option.value }"
+            @click="setMultiplier(candidate.name, option.value)"
+          >{{ option.label }}</button>
+        </div>
+        <div class="nutrition-grid"><div><span>熱量</span><b>{{ scaleNutrients(candidate.nutrients, multiplierFor(candidate.name)).caloriesKcal }}</b></div><div><span>蛋白質</span><b>{{ scaleNutrients(candidate.nutrients, multiplierFor(candidate.name)).proteinG ?? '—' }} g</b></div><div><span>碳水</span><b>{{ scaleNutrients(candidate.nutrients, multiplierFor(candidate.name)).carbsG ?? '—' }} g</b></div><div><span>脂肪</span><b>{{ scaleNutrients(candidate.nutrients, multiplierFor(candidate.name)).fatG ?? '—' }} g</b></div></div>
         <button type="button" class="button button--primary button--wide" @click="confirm(candidate)">確認並儲存本餐</button>
       </article>
     </div>

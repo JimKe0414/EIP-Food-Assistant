@@ -10,6 +10,7 @@ const error = ref('')
 const candidates = ref<MealCandidate[]>([])
 const summary = ref<string | null>(null)
 const { transcribeAudio, analyzeText } = useApi()
+const { multiplierFor, setMultiplier, reset: resetPortions } = usePortionAdjustment()
 let recorder: MediaRecorder | undefined
 let stream: MediaStream | undefined
 let chunks: Blob[] = []
@@ -37,6 +38,7 @@ async function toggle() {
 async function analyzeRecording() {
   stream?.getTracks().forEach(track => track.stop())
   loading.value = true
+  resetPortions()
   try {
     const blob = new Blob(chunks, { type: recorder?.mimeType || 'audio/webm' })
     const result = await transcribeAudio(await fileToBase64(blob), blob.type)
@@ -50,13 +52,15 @@ async function analyzeRecording() {
 }
 
 function confirm(candidate: MealCandidate) {
+  const factor = multiplierFor(candidate.name)
   emit('saved', {
     mealDate: new Date().toISOString().slice(0, 10), mealType: 'lunch', source: 'voice',
-    name: candidate.name, confidence: candidate.confidence, confirmed: true, nutrients: candidate.nutrients,
+    name: candidate.name, confidence: candidate.confidence, confirmed: true, nutrients: scaleNutrients(candidate.nutrients, factor),
     summary: summary.value
   })
   candidates.value = []
   summary.value = null
+  resetPortions()
 }
 
 onBeforeUnmount(() => stream?.getTracks().forEach(track => track.stop()))
@@ -71,7 +75,24 @@ onBeforeUnmount(() => stream?.getTracks().forEach(track => track.stop()))
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
     <div v-if="transcript" class="transcript"><span>辨識文字</span><p>{{ transcript }}</p></div>
     <section v-if="candidates.length" class="candidate-list">
-      <article v-for="candidate in candidates" :key="candidate.name" class="detected-food"><Icon name="solar:check-circle-linear" /><div><input v-model="candidate.name" aria-label="候選餐點名稱"><span>信心值 {{ Math.round(candidate.confidence * 100) }}%</span></div><button type="button" class="button button--primary button--small" @click="confirm(candidate)">確認</button></article>
+      <article v-for="candidate in candidates" :key="candidate.name" class="candidate-result">
+        <div class="detected-food">
+          <Icon name="solar:check-circle-linear" />
+          <div><input v-model="candidate.name" aria-label="候選餐點名稱"><span>信心值 {{ Math.round(candidate.confidence * 100) }}%・{{ scaleNutrients(candidate.nutrients, multiplierFor(candidate.name)).caloriesKcal }} kcal</span></div>
+          <button type="button" class="button button--primary button--small" @click="confirm(candidate)">確認</button>
+        </div>
+        <div class="portion-select" role="radiogroup" :aria-label="`${candidate.name} 份量調整`">
+          <button
+            v-for="option in portionMultiplierOptions"
+            :key="option.value"
+            type="button"
+            role="radio"
+            :aria-checked="multiplierFor(candidate.name) === option.value"
+            :class="{ active: multiplierFor(candidate.name) === option.value }"
+            @click="setMultiplier(candidate.name, option.value)"
+          >{{ option.label }}</button>
+        </div>
+      </article>
     </section>
   </div>
 </template>

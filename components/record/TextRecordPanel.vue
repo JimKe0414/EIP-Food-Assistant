@@ -11,9 +11,11 @@ const error = ref('')
 const candidates = ref<MealCandidate[]>([])
 const summary = ref<string | null>(null)
 const { analyzeText } = useApi()
+const { multiplierFor, setMultiplier, reset: resetPortions } = usePortionAdjustment()
 
 async function analyze() {
   error.value = ''
+  resetPortions()
   if (!navigator.onLine) {
     candidates.value = [{ name: content.value, portionDescription: null, confidence: 1, nutrients: { caloriesKcal: 0, proteinG: null, fatG: null, carbsG: null, fiberG: null, sodiumMg: null } }]
     summary.value = null
@@ -32,6 +34,7 @@ async function analyze() {
 }
 
 function confirm(candidate: MealCandidate) {
+  const factor = multiplierFor(candidate.name)
   emit('saved', {
     mealDate: new Date().toISOString().slice(0, 10),
     mealType: meal.value as MealInput['mealType'],
@@ -39,12 +42,13 @@ function confirm(candidate: MealCandidate) {
     name: candidate.name,
     confidence: candidate.confidence,
     confirmed: true,
-    nutrients: candidate.nutrients,
+    nutrients: scaleNutrients(candidate.nutrients, factor),
     summary: summary.value
   })
   content.value = ''
   candidates.value = []
   summary.value = null
+  resetPortions()
 }
 </script>
 
@@ -56,10 +60,23 @@ function confirm(candidate: MealCandidate) {
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
     <button class="button button--primary button--wide" type="submit" :disabled="loading">{{ loading ? '分析中…' : '產生候選並分析' }}</button>
     <section v-if="candidates.length" class="candidate-list" aria-label="餐食候選清單">
-      <article v-for="candidate in candidates" :key="candidate.name" class="detected-food">
-        <Icon name="solar:check-circle-linear" />
-        <div><input v-model="candidate.name" aria-label="候選餐點名稱"><span>信心值 {{ Math.round(candidate.confidence * 100) }}%・{{ candidate.nutrients.caloriesKcal }} kcal</span></div>
-        <button type="button" class="button button--primary button--small" @click="confirm(candidate)">確認</button>
+      <article v-for="candidate in candidates" :key="candidate.name" class="candidate-result">
+        <div class="detected-food">
+          <Icon name="solar:check-circle-linear" />
+          <div><input v-model="candidate.name" aria-label="候選餐點名稱"><span>信心值 {{ Math.round(candidate.confidence * 100) }}%・{{ scaleNutrients(candidate.nutrients, multiplierFor(candidate.name)).caloriesKcal }} kcal</span></div>
+          <button type="button" class="button button--primary button--small" @click="confirm(candidate)">確認</button>
+        </div>
+        <div class="portion-select" role="radiogroup" :aria-label="`${candidate.name} 份量調整`">
+          <button
+            v-for="option in portionMultiplierOptions"
+            :key="option.value"
+            type="button"
+            role="radio"
+            :aria-checked="multiplierFor(candidate.name) === option.value"
+            :class="{ active: multiplierFor(candidate.name) === option.value }"
+            @click="setMultiplier(candidate.name, option.value)"
+          >{{ option.label }}</button>
+        </div>
       </article>
     </section>
   </form>
