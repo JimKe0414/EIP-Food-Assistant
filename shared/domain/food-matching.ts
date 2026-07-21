@@ -40,21 +40,31 @@ export function normalizeFoodName(value: string) {
   return normalized
 }
 
+// Edit-distance based similarity, not bigram-set overlap: Chinese food names commonly
+// differ by a single inserted/dropped/swapped character between what an AI says and what
+// TFDA calls it (e.g. "白米飯" vs "白飯", "牛肉麵" vs "牛肉湯麵"). Bigram overlap scores
+// those as near-zero (no shared 2-character pairs once the insertion shifts everything),
+// which meant almost nothing ever matched in practice. Levenshtein distance treats a
+// single-character edit as a small, proportional penalty instead.
 function similarity(left: string, right: string) {
   if (left === right) return 1
+  if (!left.length || !right.length) return 0
   if (left.includes(right) || right.includes(left)) return Math.min(left.length, right.length) / Math.max(left.length, right.length)
-  const leftPairs = bigrams(left)
-  const rightPairs = bigrams(right)
-  let overlap = 0
-  const remaining = [...rightPairs]
-  for (const pair of leftPairs) {
-    const index = remaining.indexOf(pair)
-    if (index >= 0) { overlap += 1; remaining.splice(index, 1) }
-  }
-  return leftPairs.length + rightPairs.length ? 2 * overlap / (leftPairs.length + rightPairs.length) : 0
+  const distance = levenshteinDistance(left, right)
+  return 1 - distance / Math.max(left.length, right.length)
 }
 
-function bigrams(value: string) {
-  if (value.length < 2) return [value]
-  return Array.from({ length: value.length - 1 }, (_, index) => value.slice(index, index + 2))
+function levenshteinDistance(left: string, right: string) {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index)
+  let current = previous.slice()
+  for (let i = 1; i <= left.length; i++) {
+    current[0] = i
+    for (let j = 1; j <= right.length; j++) {
+      current[j] = left[i - 1] === right[j - 1]
+        ? previous[j - 1]
+        : 1 + Math.min(previous[j - 1], previous[j], current[j - 1])
+    }
+    ;[previous, current] = [current, previous]
+  }
+  return previous[right.length]
 }
