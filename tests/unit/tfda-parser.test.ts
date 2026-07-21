@@ -46,4 +46,22 @@ describe('TFDA workbook parser', () => {
     ])
     expect(() => parseWorkbook(buffer, 'test-hash-3')).toThrow(/required columns missing/)
   })
+
+  it('skips fully-blank rows but still rejects a row missing only one identifier', () => {
+    const blankBuffer = buildWorkbook([
+      newFormatHeader,
+      ['A001', '白飯', '', '', 0, 183, 183, 68.6, 3.1, 0.3, 0.1, 0.4, 41.2, 0.6, 0.1],
+      ['', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+      ['A002', '糙米飯', '', '', 0, 173, 173, 66.0, 3.3, 1.2, 0.3, 0.6, 37.3, 1.7, 0.2]
+    ])
+    const parsed = parseWorkbook(blankBuffer, 'test-hash-4')
+    expect(parsed.rows).toHaveLength(2)
+    expect(parsed.rows.map(row => row.sampleId)).toEqual(['A001', 'A002'])
+
+    const partialBuffer = buildWorkbook([
+      newFormatHeader,
+      ['', '白飯（缺編號）', '', '', 0, 183, 183, 68.6, 3.1, 0.3, 0.1, 0.4, 41.2, 0.6, 0.1]
+    ])
+    expect(() => parseWorkbook(partialBuffer, 'test-hash-5')).toThrow(/missing sample ID or name/)
+  })
 })

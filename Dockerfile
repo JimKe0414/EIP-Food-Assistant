@@ -32,6 +32,12 @@ ENV NITRO_PORT=3000
 WORKDIR /app
 
 COPY --from=build --chown=node:node /app/.output ./.output
+# xlsx eagerly requires ./dist/cpexcel.js at module-load time (legacy codepage support);
+# Nitro's rollup output references it as an unbundled external instead of inlining it, so
+# without this the file is simply missing from .output and any xlsx import throws
+# ERR_MODULE_NOT_FOUND at runtime (only surfaces here — the build stage still has the full
+# node_modules tree, which is why `nuxt build`/`pnpm dev` never show this).
+COPY --from=build --chown=node:node /app/node_modules/.pnpm/xlsx@0.18.5 ./node_modules/.pnpm/xlsx@0.18.5
 
 USER node
 

@@ -131,7 +131,7 @@ export function parseWorkbook(buffer: Buffer, fileHash: string) {
   const warnings = unknown.length ? [`發現 ${unknown.length} 個未知欄位，已忽略`] : []
   const columnsHash = sha256(Buffer.from([...headerMap.keys()].sort().join('\n')))
 
-  const rows = rawRows.map((raw, index) => {
+  const rows = rawRows.flatMap((raw, index) => {
     const row = Object.fromEntries(Object.entries(raw).map(([key, value]) => [normalize(key), value]))
     const traceFields: string[] = []
     const pick = (field: string) => {
@@ -150,9 +150,12 @@ export function parseWorkbook(buffer: Buffer, fileHash: string) {
     }
     const sampleId = String(pick('sampleId') ?? '').trim()
     const name = String(pick('name') ?? '').trim()
+    // The sheet has occasional fully-blank rows (section breaks); skip those, but a row
+    // with only one of the two identifiers filled in is a genuine data problem.
+    if (!sampleId && !name) return []
     if (!sampleId || !name) throw new Error(`TFDA row ${index + 2} is missing sample ID or name`)
 
-    return {
+    return [{
       sampleId, name,
       aliases: String(pick('aliases') ?? '').trim() || null,
       description: String(pick('description') ?? '').trim() || null,
@@ -164,7 +167,7 @@ export function parseWorkbook(buffer: Buffer, fileHash: string) {
       sugarG: number('sugarG'),
       optionalNutrients: Object.fromEntries(optionalColumns.map(column => [column, optionalNumber(column)])),
       traceFields, versionHash: fileHash
-    }
+    }]
   })
   return { rows, columnsHash, warnings }
 }
