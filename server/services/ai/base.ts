@@ -45,7 +45,12 @@ judge the portion at all; only use null when you genuinely cannot judge a weight
 Use null for a nutrient value when it cannot be estimated. Do not provide medical diagnosis.`
 
 export const recommendationSystemPrompt = `Select only candidate IDs present in candidateIds. Return JSON only:
-{"candidateIds":["uuid"],"reasonById":{"uuid":"short reason"}}. Never invent IDs.`
+{"candidateIds":["uuid"],"reasonById":{"uuid":"short reason"}}. Never invent IDs.
+If nutrientTargets is non-empty, it is the user's remaining nutrient budget for the rest of today (calories/protein/
+fat/carbs already adjusted for what they've logged so far) — prefer candidates whose calories fit within
+nutrientTargets.caloriesKcal rather than picking the largest/richest option regardless of it, and mention the fit in
+reasonById when it influenced your pick. An empty nutrientTargets means the user hasn't set up a profile yet —
+fall back to goal and recentMealNames only.`
 
 export const portionEstimateSystemPrompt = `Estimate the weight in grams of one food portion. You are given JSON with:
 originalDescription (what the user/model first said this food was), portionDescription (a rough portion phrase like
