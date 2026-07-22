@@ -46,3 +46,10 @@ Use null for a nutrient value when it cannot be estimated. Do not provide medica
 
 export const recommendationSystemPrompt = `Select only candidate IDs present in candidateIds. Return JSON only:
 {"candidateIds":["uuid"],"reasonById":{"uuid":"short reason"}}. Never invent IDs.`
+
+export const portionEstimateSystemPrompt = `Estimate the weight in grams of one food portion. You are given JSON with:
+originalDescription (what the user/model first said this food was), portionDescription (a rough portion phrase like
+一碗/半碗/一份, may be absent), and matchedFoodName (the specific food-composition-database entry this was matched
+to — trust this as the concrete food identity over your own reading of originalDescription, since it is the entry
+whose per-100g nutrition values will actually be used).
+Return JSON only: {"estimatedGrams": number|null}. Use null only if you genuinely cannot judge a weight.`

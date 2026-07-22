@@ -2,11 +2,13 @@ import {
   AiProviderError,
   lunchRecommendationSchema,
   mealAnalysisResultSchema,
+  portionEstimateSchema,
   type AiProvider,
   type LunchContext,
+  type PortionEstimateQuery,
   type TextOrImage
 } from '~/shared/domain/ai'
-import { fetchWithTimeout, mealSystemPrompt, parseJsonContent, recommendationSystemPrompt } from './base'
+import { fetchWithTimeout, mealSystemPrompt, parseJsonContent, portionEstimateSystemPrompt, recommendationSystemPrompt } from './base'
 
 interface OllamaOptions {
   baseUrl: string
@@ -30,6 +32,11 @@ export class OllamaAiProvider implements AiProvider {
   async recommendLunch(context: LunchContext) {
     const content = await this.chat(this.options.textModel, recommendationSystemPrompt, JSON.stringify(context), undefined, 20_000)
     return lunchRecommendationSchema.parse(parseJsonContent(content))
+  }
+
+  async estimatePortionGrams(query: PortionEstimateQuery) {
+    const content = await this.chat(this.options.textModel, portionEstimateSystemPrompt, JSON.stringify(query), undefined, 20_000)
+    return portionEstimateSchema.parse(parseJsonContent(content))
   }
 
   private chat(model: string, system: string, prompt: string, images: string[] | undefined, timeoutMs: number) {

@@ -21,6 +21,24 @@ export function findBestFoodMatch(query: string, candidates: FoodMatchCandidate[
   return scored[0] && scored[0].score >= 0.45 ? scored[0] : null
 }
 
+// Longest phrases first so e.g. "清蒸" is removed whole rather than leaving a stray "清"
+// behind after "蒸" is stripped. Cooking method words are NOT stripped for the primary
+// match attempt — 炒/炸/煎 in particular add significant oil/calories, so a food-matching
+// entry that keeps the cooking method (if one exists in the database) is more accurate than
+// one that doesn't. This is only meant to be tried as a fallback when the full name fails to
+// match anything, on the theory that a user/model who didn't name a specific dish variant
+// ("炒麵" without saying which noodle) has no stronger claim to any one ingredient anyway.
+const cookingMethodWords = [
+  '清蒸', '紅燒', '乾煎', '清炒', '醬燒', '水煮', '涼拌', '油炸', '快炒',
+  '蒸', '煮', '炒', '炸', '烤', '滷', '燉', '燙', '煎', '燒', '拌', '滾'
+]
+
+export function stripCookingMethod(value: string): string {
+  let stripped = value
+  for (const word of cookingMethodWords) stripped = stripped.replaceAll(word, '')
+  return stripped.trim()
+}
+
 export function convertToGrams(amount: number, unit: string, gramsPerServing?: number) {
   if (!Number.isFinite(amount) || amount <= 0) throw new Error('Amount must be positive')
   const normalized = unit.trim().toLowerCase()

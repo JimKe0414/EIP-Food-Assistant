@@ -22,4 +22,8 @@ export class LocalWhisperProvider implements AiProvider {
   recommendLunch(): Promise<never> {
     throw new AiProviderError('UNSUPPORTED_OPERATION', 'Local Whisper does not recommend meals')
   }
+
+  estimatePortionGrams(): Promise<never> {
+    throw new AiProviderError('UNSUPPORTED_OPERATION', 'Local Whisper does not estimate portions')
+  }
 }

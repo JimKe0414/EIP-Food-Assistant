@@ -49,6 +49,19 @@ export const lunchContextSchema = z.object({
   nutrientTargets: z.record(z.string(), z.number()).default({})
 })
 
+// Asked once a food name has been matched to a specific nutrients-table entry, so the model
+// can re-estimate the portion weight grounded in that concrete food identity (e.g. "意麵")
+// instead of whatever vague dish name the user/model originally said (e.g. "炒麵").
+export const portionEstimateQuerySchema = z.object({
+  originalDescription: z.string().trim().min(1).max(200),
+  portionDescription: z.string().trim().max(200).nullable(),
+  matchedFoodName: z.string().trim().min(1).max(200)
+})
+
+export const portionEstimateSchema = z.object({
+  estimatedGrams: z.number().positive().nullable().default(null)
+})
+
 export type NutrientSummary = z.infer<typeof nutrientSummarySchema>
 export type MealCandidate = z.infer<typeof mealCandidateSchema>
 export type MealAnalysisResult = z.infer<typeof mealAnalysisResultSchema>
@@ -56,11 +69,14 @@ export type TranscriptionResult = z.infer<typeof transcriptionResultSchema>
 export type LunchRecommendation = z.infer<typeof lunchRecommendationSchema>
 export type TextOrImage = z.infer<typeof textOrImageSchema>
 export type LunchContext = z.infer<typeof lunchContextSchema>
+export type PortionEstimateQuery = z.infer<typeof portionEstimateQuerySchema>
+export type PortionEstimate = z.infer<typeof portionEstimateSchema>
 
 export interface AiProvider {
   analyzeMeal(input: TextOrImage): Promise<MealAnalysisResult>
   transcribeMeal(audio: Uint8Array, mimeType: string): Promise<TranscriptionResult>
   recommendLunch(context: LunchContext): Promise<LunchRecommendation>
+  estimatePortionGrams(query: PortionEstimateQuery): Promise<PortionEstimate>
 }
 
 export class AiProviderError extends Error {

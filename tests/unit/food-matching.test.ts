@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { convertToGrams, findBestFoodMatch } from '../../shared/domain/food-matching'
+import { convertToGrams, findBestFoodMatch, stripCookingMethod } from '../../shared/domain/food-matching'
 
 describe('food matching', () => {
   it('matches aliases and common Chinese synonyms', () => {
@@ -26,5 +26,12 @@ describe('food matching', () => {
   it('does not force a match onto an unrelated candidate', () => {
     const match = findBestFoodMatch('炸雞排', [{ id: '1', name: '白飯' }, { id: '2', name: '烤地瓜' }])
     expect(match).toBeNull()
+  })
+
+  it('strips cooking-method words, longest phrases first so no stray characters remain', () => {
+    expect(stripCookingMethod('清蒸魚')).toBe('魚')
+    expect(stripCookingMethod('紅燒肉')).toBe('肉')
+    expect(stripCookingMethod('炒麵')).toBe('麵')
+    expect(stripCookingMethod('白飯')).toBe('白飯')
   })
 })

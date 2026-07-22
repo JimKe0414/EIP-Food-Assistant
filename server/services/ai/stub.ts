@@ -1,9 +1,11 @@
 import {
   lunchRecommendationSchema,
   mealAnalysisResultSchema,
+  portionEstimateSchema,
   transcriptionResultSchema,
   type AiProvider,
   type LunchContext,
+  type PortionEstimateQuery,
   type TextOrImage
 } from '~/shared/domain/ai'
 
@@ -32,5 +34,10 @@ export class StubAiProvider implements AiProvider {
       candidateIds,
       reasonById: Object.fromEntries(candidateIds.map(id => [id, `符合「${context.goal}」且在既有候選中`]))
     })
+  }
+
+  async estimatePortionGrams(query: PortionEstimateQuery) {
+    void query
+    return portionEstimateSchema.parse({ estimatedGrams: 150 })
   }
 }

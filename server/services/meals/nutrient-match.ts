@@ -1,6 +1,6 @@
 import type { Sql } from 'postgres'
-import type { MealAnalysisResult, MealCandidate } from '../../../shared/domain/ai'
-import { findBestFoodMatch, type FoodMatchCandidate } from '../../../shared/domain/food-matching'
+import type { MealAnalysisResult, MealCandidate, PortionEstimate, PortionEstimateQuery } from '../../../shared/domain/ai'
+import { findBestFoodMatch, stripCookingMethod, type FoodMatchCandidate } from '../../../shared/domain/food-matching'
 
 export interface NutrientRow {
   sample_id: string
@@ -25,16 +25,21 @@ export interface MatchOutcome {
   gap: { matchedSampleId: string | null, matchedName: string | null, score: number | null } | null
 }
 
+// Injected rather than a full AiProvider so this stays trivially unit-testable with a plain
+// fake function instead of having to stub out the whole provider interface.
+export type PortionGramsEstimator = (query: PortionEstimateQuery) => Promise<PortionEstimate>
+
 const SODIUM_KEY = '鈉（mg）'
 const STRONG_MATCH_SCORE = 0.75
 
 // AI candidates carry the model's own calorie/macro/weight guesses. When a food match is
 // found, this replaces ALL nutrient values (including calories) with the matched TFDA
-// food's real per-100g composition scaled by a portion weight — preferring the AI's own
-// gram estimate, falling back to reverse-deriving grams from its calorie guess if it didn't
-// give one. Unmatched candidates are left as pure AI guesses, with their confidence capped
-// so the UI can flag them as unverified.
-export async function enrichMealAnalysisWithNutrients(result: MealAnalysisResult, sql: Sql): Promise<MealAnalysisResult> {
+// food's real per-100g composition scaled by a portion weight — preferring a fresh AI
+// estimate grounded in the specific matched food identity, then the AI's original
+// (ungrounded) gram guess, then reverse-deriving grams from its calorie guess as a last
+// resort. Unmatched candidates are left as pure AI guesses, with their confidence capped so
+// the UI can flag them as unverified.
+export async function enrichMealAnalysisWithNutrients(result: MealAnalysisResult, sql: Sql, estimateGrams: PortionGramsEstimator): Promise<MealAnalysisResult> {
   const rows = await sql<NutrientRow[]>`
     select sample_id, name, aliases, calories_kcal, protein_g, fat_g, carbs_g, fiber_g, optional_nutrients
     from nutrients
@@ -44,7 +49,7 @@ export async function enrichMealAnalysisWithNutrients(result: MealAnalysisResult
   const pool: FoodMatchCandidate[] = rows.map(row => ({ id: row.sample_id, name: row.name, aliases: row.aliases }))
   const byId = new Map(rows.map(row => [row.sample_id, row]))
 
-  const outcomes = result.candidates.map(candidate => matchCandidate(candidate, pool, byId))
+  const outcomes = await Promise.all(result.candidates.map(candidate => matchCandidate(candidate, pool, byId, estimateGrams)))
   await recordGaps(sql, outcomes)
   return { ...result, candidates: outcomes.map(outcome => outcome.candidate) }
 }
@@ -65,29 +70,61 @@ async function recordGaps(sql: Sql, outcomes: MatchOutcome[]) {
   }
 }
 
-export function matchCandidate(candidate: MealCandidate, pool: FoodMatchCandidate[], byId: Map<string, NutrientRow>): MatchOutcome {
+interface ResolvedMatch {
+  nutrient: NutrientRow
+  matchedName: string
+  matchedSampleId: string
+  score: number
+  viaCookingStrip: boolean
+}
+
+// Tries the full name first (preserves cooking-method-specific entries like "炸雞排" that
+// carry real oil/calorie differences). Only falls back to a cooking-method-stripped name
+// when the full name didn't match at all, or matched weakly — a stripped-name match is
+// always flagged as a gap even if its score is high, since it means the specific dish/
+// cooking-method combination wasn't found as-is.
+function resolveMatch(candidateName: string, pool: FoodMatchCandidate[], byId: Map<string, NutrientRow>): ResolvedMatch | null {
+  let match = findBestFoodMatch(candidateName, pool)
+  let viaCookingStrip = false
+
+  if (!match || match.score < STRONG_MATCH_SCORE) {
+    const stripped = stripCookingMethod(candidateName)
+    if (stripped && stripped !== candidateName) {
+      const strippedMatch = findBestFoodMatch(stripped, pool)
+      if (strippedMatch && (!match || strippedMatch.score > match.score)) {
+        match = strippedMatch
+        viaCookingStrip = true
+      }
+    }
+  }
+  if (!match) return null
+
+  const nutrient = byId.get(match.candidate.id)
+  if (!nutrient) return null
+  return { nutrient, matchedName: match.candidate.name, matchedSampleId: match.candidate.id, score: match.score, viaCookingStrip }
+}
+
+export async function matchCandidate(
+  candidate: MealCandidate,
+  pool: FoodMatchCandidate[],
+  byId: Map<string, NutrientRow>,
+  estimateGrams: PortionGramsEstimator
+): Promise<MatchOutcome> {
   const unverified = (gap: MatchOutcome['gap']): MatchOutcome => ({
     candidate: { ...candidate, confidence: Math.min(candidate.confidence, 0.5) },
     gap
   })
 
-  const match = findBestFoodMatch(candidate.name, pool)
-  if (!match) return unverified({ matchedSampleId: null, matchedName: null, score: null })
+  const found = resolveMatch(candidate.name, pool, byId)
+  if (!found) return unverified({ matchedSampleId: null, matchedName: null, score: null })
 
-  const nutrient = byId.get(match.candidate.id)
-  const caloriesPer100g = numberOrNull(nutrient?.calories_kcal)
-  const gap = match.score < STRONG_MATCH_SCORE
-    ? { matchedSampleId: match.candidate.id, matchedName: match.candidate.name, score: round(match.score) }
+  const caloriesPer100g = numberOrNull(found.nutrient.calories_kcal)
+  const gap = (found.score < STRONG_MATCH_SCORE || found.viaCookingStrip)
+    ? { matchedSampleId: found.matchedSampleId, matchedName: found.matchedName, score: round(found.score) }
     : null
-  if (!nutrient || !caloriesPer100g || caloriesPer100g <= 0) return unverified(gap)
+  if (!caloriesPer100g || caloriesPer100g <= 0) return unverified(gap)
 
-  // Prefer the AI's own weight estimate — it's a direct judgment, not a number reverse-
-  // engineered from a possibly-unrelated calorie guess. Only back-calculate from calories
-  // when the model didn't give one (older prompt/provider, or it genuinely couldn't judge).
-  const aiCalories = candidate.nutrients.caloriesKcal
-  const estimatedGrams = candidate.estimatedGrams && candidate.estimatedGrams > 0
-    ? candidate.estimatedGrams
-    : Number.isFinite(aiCalories) && aiCalories > 0 ? aiCalories / caloriesPer100g * 100 : null
+  const estimatedGrams = await resolveEstimatedGrams(candidate, found, caloriesPer100g, estimateGrams)
   if (estimatedGrams === null) return unverified(gap)
 
   const scale = (perHundredGram: number | null) => perHundredGram === null ? null : round(perHundredGram * estimatedGrams / 100)
@@ -98,15 +135,37 @@ export function matchCandidate(candidate: MealCandidate, pool: FoodMatchCandidat
       estimatedGrams: round(estimatedGrams),
       nutrients: {
         caloriesKcal: scale(caloriesPer100g) ?? 0,
-        proteinG: scale(numberOrNull(nutrient.protein_g)),
-        fatG: scale(numberOrNull(nutrient.fat_g)),
-        carbsG: scale(numberOrNull(nutrient.carbs_g)),
-        fiberG: scale(numberOrNull(nutrient.fiber_g)),
-        sodiumMg: scale(nutrient.optional_nutrients?.[SODIUM_KEY] ?? null)
+        proteinG: scale(numberOrNull(found.nutrient.protein_g)),
+        fatG: scale(numberOrNull(found.nutrient.fat_g)),
+        carbsG: scale(numberOrNull(found.nutrient.carbs_g)),
+        fiberG: scale(numberOrNull(found.nutrient.fiber_g)),
+        sodiumMg: scale(found.nutrient.optional_nutrients?.[SODIUM_KEY] ?? null)
       }
     },
     gap
   }
+}
+
+// Priority: (1) ask the model again, now grounded in the specific matched food identity —
+// more accurate than its first guess since it knows exactly which TFDA entry this is; (2)
+// the AI's own first-pass gram guess, if it gave one; (3) reverse-derive grams from its
+// calorie guess as a last resort. (1) is a network call and allowed to fail silently — it's
+// a refinement, not a requirement.
+async function resolveEstimatedGrams(candidate: MealCandidate, found: ResolvedMatch, caloriesPer100g: number, estimateGrams: PortionGramsEstimator): Promise<number | null> {
+  try {
+    const refined = await estimateGrams({
+      originalDescription: candidate.name,
+      portionDescription: candidate.portionDescription,
+      matchedFoodName: found.matchedName
+    })
+    if (refined.estimatedGrams && refined.estimatedGrams > 0) return refined.estimatedGrams
+  } catch (error) {
+    console.error('[nutrient-match] portion re-estimate failed, falling back', error)
+  }
+
+  if (candidate.estimatedGrams && candidate.estimatedGrams > 0) return candidate.estimatedGrams
+  const aiCalories = candidate.nutrients.caloriesKcal
+  return Number.isFinite(aiCalories) && aiCalories > 0 ? aiCalories / caloriesPer100g * 100 : null
 }
 
 function numberOrNull(value: string | null | undefined) { return value === null || value === undefined ? null : Number(value) }

@@ -31,8 +31,10 @@ await boss.work(AI_QUEUE, { batchSize: 1, localConcurrency: 1 }, async ([job]) =
   try {
     const provider = createAiProvider(aiConfig, purpose)
     let output: object
-    if (task.type === 'analyzeMeal') output = await enrichMealAnalysisWithNutrients(await provider.analyzeMeal(task.input), sql)
-    else if (task.type === 'transcribeMeal') output = await provider.transcribeMeal(Buffer.from(task.audioBase64, 'base64'), task.mimeType)
+    if (task.type === 'analyzeMeal') {
+      const analyzed = await provider.analyzeMeal(task.input)
+      output = await enrichMealAnalysisWithNutrients(analyzed, sql, query => provider.estimatePortionGrams(query))
+    } else if (task.type === 'transcribeMeal') output = await provider.transcribeMeal(Buffer.from(task.audioBase64, 'base64'), task.mimeType)
     else output = await provider.recommendLunch(task.context)
 
     await audit(task.userId, task.type, providerName, 'success', Date.now() - started)
