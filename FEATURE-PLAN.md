@@ -70,9 +70,7 @@
 
 已決定：沿用現有的精準模式（`profile_snapshots` 精確年齡/身高/體重/體脂 → `calculateBodyMetrics()` 算 BMR/TDEE），不做年齡分級（少年/青年/中年/老年）的粗略額度系統。理由：使用者已經是用去識別化的 `identity_hmac` 存取，不是明文個資，精準模式本來就沒有隱私疑慮，分級只會犧牲準確度。
 
-待做：
-1. `recommend-lunch.post.ts` 的 `nutrientTargets` 目前永遠是空物件（`context: { ..., nutrientTargets: {} }`），沒有真的把使用者的 TDEE 帶進推薦邏輯 → 改成查最新一筆 `profile_snapshots`、算出 `calculateBodyMetrics()` 的 TDEE，帶進 AI 推薦的 context
-2. 第三期的「今日已吃 vs 還剩多少額度」也依賴這個真實 TDEE 當分母，兩期可以一起做
+**實作完成（2026-07-22）**：`recommend-lunch.post.ts` 現在查最新一筆 `profile_snapshots`、算出 `calculateBodyMetrics()` 的 TDEE 與巨量營養素目標，扣掉今天已經吃掉的（不是整天的額度都塞給一餐午餐），把「剩餘額度」帶進 AI 推薦的 context。`recommendationSystemPrompt` 也補上說明，明確要求 AI 依剩餘熱量挑選候選、並在理由裡提到。實測：AI 回傳的 `reasonById` 已經會寫「Calorie fit within nutrient targets」，確認真的有被採用，沒有個人資料時 fallback 回空物件（維持原行為）。
 
 ---
 
