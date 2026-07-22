@@ -95,6 +95,8 @@ svg { display: block; }
 .metric-card > p { margin: 3px 0 10px; color: var(--muted); font-size: 9px; }
 .progress { overflow: hidden; height: 5px; border-radius: 99px; background: #edf2f0; }
 .progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,var(--primary),#62c5a7); }
+.metric-card--soon { opacity: .6; }
+.metric-card--soon .metric-card__top b { padding: 3px 7px; border-radius: 99px; color: var(--muted); background: var(--surface-soft); font-size: 8px; font-weight: 800; }
 .weekly-mini-chart { display: none; }
 .featured-food { padding: 13px; display: grid; grid-template-columns: 62px 1fr 42px; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; box-shadow: var(--shadow); }
 .food-illustration { width: 62px; height: 62px; display: grid; place-items: center; border-radius: 16px; background: linear-gradient(145deg,#e4f4ee,#f7d9a7); font-size: 29px; }

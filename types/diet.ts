@@ -8,6 +8,9 @@ export interface Metric {
   value: string
   note: string
   progress: number
+  // No real tracking exists yet for this metric (e.g. water intake, vegetable servings) —
+  // render it as a visibly disabled placeholder instead of a fabricated number.
+  comingSoon?: boolean
 }
 
 export interface MenuItem {
