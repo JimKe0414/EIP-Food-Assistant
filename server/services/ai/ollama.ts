@@ -6,7 +6,7 @@ import {
   type LunchContext,
   type TextOrImage
 } from '~/shared/domain/ai'
-import { fetchWithTimeout, mealSystemPrompt, parseJsonContent, recommendationSystemPrompt } from './base'
+import { fetchWithTimeout, logAiPrompt, mealSystemPrompt, parseJsonContent, recommendationSystemPrompt } from './base'
 
 interface OllamaOptions {
   baseUrl: string
@@ -28,6 +28,7 @@ export class OllamaAiProvider implements AiProvider {
   }
 
   async recommendLunch(context: LunchContext) {
+    logAiPrompt('ollama', recommendationSystemPrompt, context)
     const content = await this.chat(this.options.textModel, recommendationSystemPrompt, JSON.stringify(context), undefined, 20_000)
     return lunchRecommendationSchema.parse(parseJsonContent(content))
   }

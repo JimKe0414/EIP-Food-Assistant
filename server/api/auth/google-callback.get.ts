@@ -35,7 +35,10 @@ export default defineEventHandler(async (event) => {
   })
   const email = String(payload.email ?? '').trim().toLowerCase()
   const domain = email.split('@')[1]
-  if (!email || domain !== config.googleWorkspaceDomain || payload.email_verified !== true) {
+  if (!email || payload.email_verified !== true) {
+    throw createError({ statusCode: 403, statusMessage: 'Verified Google account is required' })
+  }
+  if (config.googleWorkspaceDomain && domain !== config.googleWorkspaceDomain) {
     throw createError({ statusCode: 403, statusMessage: 'Workspace account is not allowed' })
   }
 

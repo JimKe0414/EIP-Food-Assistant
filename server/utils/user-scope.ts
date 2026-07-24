@@ -32,7 +32,9 @@ export async function getUserSession(event: H3Event) {
     cookie: {
       httpOnly: true,
       secure: !import.meta.dev,
-      sameSite: 'strict',
+      // OAuth returns from accounts.google.com via a top-level GET navigation.
+      // Lax keeps the session cookie available for state/PKCE validation on that callback.
+      sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60 * 8
     }

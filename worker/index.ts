@@ -1,6 +1,6 @@
 import { PgBoss } from 'pg-boss'
 import postgres from 'postgres'
-import { AiProviderError } from '../shared/domain/ai'
+import { AiProviderError, enforceLunchRecommendationPolicy } from '../shared/domain/ai'
 import { AI_QUEUE, TFDA_QUEUE, aiJobSchema } from '../shared/domain/jobs'
 import { aiConfigurationFromEnv, createAiProvider, validateAiConfiguration } from '../server/services/ai'
 
@@ -32,7 +32,7 @@ await boss.work(AI_QUEUE, { batchSize: 1, localConcurrency: 1 }, async ([job]) =
     let output: object
     if (task.type === 'analyzeMeal') output = await provider.analyzeMeal(task.input)
     else if (task.type === 'transcribeMeal') output = await provider.transcribeMeal(Buffer.from(task.audioBase64, 'base64'), task.mimeType)
-    else output = await provider.recommendLunch(task.context)
+    else output = enforceLunchRecommendationPolicy(task.context, await provider.recommendLunch(task.context))
 
     await audit(task.userId, task.type, providerName, 'success', Date.now() - started)
     return output

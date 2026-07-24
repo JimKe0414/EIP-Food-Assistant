@@ -6,7 +6,7 @@ import {
   type LunchContext,
   type TextOrImage
 } from '~/shared/domain/ai'
-import { fetchWithTimeout, mealSystemPrompt, parseJsonContent, recommendationSystemPrompt } from './base'
+import { fetchWithTimeout, logAiPrompt, mealSystemPrompt, parseJsonContent, recommendationSystemPrompt } from './base'
 
 interface OpenAiCompatibleOptions {
   baseUrl: string
@@ -14,6 +14,7 @@ interface OpenAiCompatibleOptions {
   textModel: string
   visionModel: string
   audioModel: string
+  maxTokens: number
 }
 
 export class OpenAiCompatibleProvider implements AiProvider {
@@ -43,6 +44,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
   }
 
   async recommendLunch(context: LunchContext) {
+    logAiPrompt('openai-compatible', recommendationSystemPrompt, context)
     const content = await this.chat(this.options.textModel, recommendationSystemPrompt, JSON.stringify(context), 20_000)
     return lunchRecommendationSchema.parse(parseJsonContent(content))
   }
@@ -53,7 +55,12 @@ export class OpenAiCompatibleProvider implements AiProvider {
       {
         method: 'POST',
         headers: this.authHeaders(true),
-        body: JSON.stringify({ model, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: system }, { role: 'user', content }] })
+        body: JSON.stringify({
+          model,
+          max_tokens: this.options.maxTokens,
+          response_format: { type: 'json_object' },
+          messages: [{ role: 'system', content: system }, { role: 'user', content }]
+        })
       },
       timeoutMs,
       async response => String((await response.json() as { choices?: { message?: { content?: string } }[] }).choices?.[0]?.message?.content ?? '')

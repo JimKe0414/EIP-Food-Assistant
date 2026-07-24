@@ -13,9 +13,6 @@ export default defineEventHandler(async (event) => {
     return { email }
   })
   const domain = body.email.split('@')[1]
-  if (config.googleWorkspaceDomain && domain !== config.googleWorkspaceDomain) {
-    throw createError({ statusCode: 403, statusMessage: 'Workspace account is not allowed' })
-  }
 
   const identityHmac = createIdentityHmac(body.email, config.identityHmacSecret)
   const [user] = await useDatabase().insert(users).values({ identityHmac }).onConflictDoUpdate({

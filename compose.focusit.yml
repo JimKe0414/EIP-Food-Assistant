@@ -1,0 +1,20 @@
+services:
+  web:
+    environment:
+      NUXT_PUBLIC_AI_PROCESSING_MODE: cloud
+
+  worker:
+    environment:
+      AI_EGRESS_MODE: cloud-approved
+      AI_TEXT_PROVIDER: openai-compatible
+      AI_VISION_PROVIDER: stub
+      AI_AUDIO_PROVIDER: stub
+      OPENAI_COMPAT_BASE_URL: ${OPENAI_COMPAT_BASE_URL:-https://api.focusit.tw/openai/v1}
+      OPENAI_COMPAT_TEXT_MODEL: ${OPENAI_COMPAT_TEXT_MODEL:-Qwen3.6-35B-A3B-fast}
+      OPENAI_COMPAT_MAX_TOKENS: ${OPENAI_COMPAT_MAX_TOKENS:-4096}
+    secrets:
+      - openai_compat_api_key
+
+secrets:
+  openai_compat_api_key:
+    file: ./secrets/openai_compat_api_key.txt

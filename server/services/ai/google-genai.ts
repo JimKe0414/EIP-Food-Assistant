@@ -7,7 +7,7 @@ import {
   type LunchContext,
   type TextOrImage
 } from '~/shared/domain/ai'
-import { fetchWithTimeout, mealSystemPrompt, parseJsonContent, recommendationSystemPrompt } from './base'
+import { fetchWithTimeout, logAiPrompt, mealSystemPrompt, parseJsonContent, recommendationSystemPrompt } from './base'
 
 interface GoogleOptions { apiKey: string, textModel: string, visionModel: string, audioModel: string }
 
@@ -40,6 +40,7 @@ export class GoogleGenAiProvider implements AiProvider {
   }
 
   async recommendLunch(context: LunchContext) {
+    logAiPrompt('google-genai', recommendationSystemPrompt, context)
     const content = await this.generate(this.options.textModel, [{ text: `${recommendationSystemPrompt}\n${JSON.stringify(context)}` }], 20_000)
     return lunchRecommendationSchema.parse(parseJsonContent(content))
   }

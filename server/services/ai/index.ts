@@ -24,6 +24,7 @@ export interface AiConfiguration {
   openAiTextModel: string
   openAiVisionModel: string
   openAiAudioModel: string
+  openAiMaxTokens: number
   googleApiKey: string
   googleTextModel: string
   googleVisionModel: string
@@ -38,6 +39,9 @@ export function validateAiConfiguration(config: AiConfiguration) {
   }
   if (configured.includes('openai-compatible') && (!config.openAiBaseUrl || !config.openAiApiKey)) {
     throw new Error('OpenAI-compatible provider requires base URL and API key')
+  }
+  if (configured.includes('openai-compatible') && (!Number.isInteger(config.openAiMaxTokens) || config.openAiMaxTokens < 1)) {
+    throw new Error('OPENAI_COMPAT_MAX_TOKENS must be a positive integer')
   }
   if (configured.includes('google-genai') && !config.googleApiKey) {
     throw new Error('Google GenAI provider requires an API key')
@@ -56,7 +60,8 @@ export function createAiProvider(config: AiConfiguration, purpose: ProviderPurpo
       apiKey: config.openAiApiKey,
       textModel: config.openAiTextModel || config.textModel,
       visionModel: config.openAiVisionModel || config.visionModel,
-      audioModel: config.openAiAudioModel || config.audioModel
+      audioModel: config.openAiAudioModel || config.audioModel,
+      maxTokens: config.openAiMaxTokens
     })
     case 'google-genai': return new GoogleGenAiProvider({
       apiKey: config.googleApiKey,
@@ -83,6 +88,7 @@ export function aiConfigurationFromEnv(env: NodeJS.ProcessEnv = process.env): Ai
     openAiTextModel: env.OPENAI_COMPAT_TEXT_MODEL || '',
     openAiVisionModel: env.OPENAI_COMPAT_VISION_MODEL || '',
     openAiAudioModel: env.OPENAI_COMPAT_AUDIO_MODEL || '',
+    openAiMaxTokens: Number(env.OPENAI_COMPAT_MAX_TOKENS || '4096'),
     googleApiKey: secretValue('google_genai_api_key', env.GOOGLE_GENAI_API_KEY),
     googleTextModel: env.GOOGLE_GENAI_TEXT_MODEL || 'gemini-2.5-flash',
     googleVisionModel: env.GOOGLE_GENAI_VISION_MODEL || 'gemini-2.5-flash',

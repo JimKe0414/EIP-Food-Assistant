@@ -8,23 +8,26 @@ services:
       dockerfile: Dockerfile
       target: web-runtime
     restart: unless-stopped
-    ports:
-      - "${WEB_PORT:-3000}:3000"
+    expose:
+      - "3000"
     environment:
       NODE_ENV: production
       NITRO_HOST: 0.0.0.0
       NITRO_PORT: 3000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-food_app}:${POSTGRES_PASSWORD:-local-only-change-me}@postgres:5432/${POSTGRES_DB:-first_choice_food}
-      SESSION_PASSWORD: ${SESSION_PASSWORD:-development-session-password-change-me-32-chars}
-      IDENTITY_HMAC_SECRET: ${IDENTITY_HMAC_SECRET:-development-identity-hmac-secret-change-me}
-      INTERNAL_WORKER_TOKEN: ${INTERNAL_WORKER_TOKEN:-development-internal-worker-token-change-me}
-      GOOGLE_WORKSPACE_DOMAIN: ${GOOGLE_WORKSPACE_DOMAIN:-example.com}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3000/api/auth/google-callback}
-      ALLOW_DEV_AUTH: ${ALLOW_DEV_AUTH:-false}
-      TFDA_AUTO_DOWNLOAD: ${TFDA_AUTO_DOWNLOAD:-false}
-      TFDA_NUTRIENT_XLSX_URL: ${TFDA_NUTRIENT_XLSX_URL:-https://consumer.fda.gov.tw/uc/GetFile.ashx?type=ServerFile&id=4862259227103213368}
+      NUXT_DATABASE_URL: postgresql://${POSTGRES_USER:-food_app}:${POSTGRES_PASSWORD:-local-only-change-me}@postgres:5432/${POSTGRES_DB:-first_choice_food}
+      NUXT_SESSION_PASSWORD: ${SESSION_PASSWORD:-development-session-password-change-me-32-chars}
+      NUXT_IDENTITY_HMAC_SECRET: ${IDENTITY_HMAC_SECRET:-development-identity-hmac-secret-change-me}
+      NUXT_INTERNAL_WORKER_TOKEN: ${INTERNAL_WORKER_TOKEN:-development-internal-worker-token-change-me}
+      NUXT_AUTH_MODE: ${AUTH_MODE:-dev}
+      NUXT_GOOGLE_WORKSPACE_DOMAIN: ${GOOGLE_WORKSPACE_DOMAIN:-}
+      NUXT_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      NUXT_GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      NUXT_GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-https://localhost:3000/api/auth/google-callback}
+      NUXT_ALLOW_DEV_AUTH: ${ALLOW_DEV_AUTH:-false}
+      NUXT_TFDA_AUTO_DOWNLOAD: ${TFDA_AUTO_DOWNLOAD:-false}
+      NUXT_TFDA_NUTRIENT_XLSX_URL: ${TFDA_NUTRIENT_XLSX_URL:-https://consumer.fda.gov.tw/uc/GetFile.ashx?type=ServerFile&id=4862259227103213368}
+      NUXT_PUBLIC_AUTH_MODE: ${AUTH_MODE:-dev}
+      NUXT_PUBLIC_AI_PROCESSING_MODE: local
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -42,6 +45,21 @@ services:
       - frontend
       - backend
 
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3000}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./.data/caddy:/data
+      - ./.data/caddy-config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - frontend
+
   worker:
     image: first-choice-for-food-worker:local
     build:
@@ -55,6 +73,7 @@ services:
       AI_TEXT_PROVIDER: ${AI_TEXT_PROVIDER:-stub}
       AI_VISION_PROVIDER: ${AI_VISION_PROVIDER:-stub}
       AI_AUDIO_PROVIDER: ${AI_AUDIO_PROVIDER:-stub}
+      AI_LOG_PROMPTS: ${AI_LOG_PROMPTS:-false}
       AI_TEXT_MODEL: ${AI_TEXT_MODEL:-llama3.1:8b}
       AI_VISION_MODEL: ${AI_VISION_MODEL:-llava:13b}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}

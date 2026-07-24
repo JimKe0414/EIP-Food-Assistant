@@ -10,15 +10,17 @@ export default defineNuxtConfig({
     databaseUrl: process.env.DATABASE_URL ?? '',
     sessionPassword: process.env.SESSION_PASSWORD ?? 'development-session-password-change-me-32-chars',
     identityHmacSecret: process.env.IDENTITY_HMAC_SECRET ?? 'development-identity-hmac-secret-change-me',
+    authMode: process.env.AUTH_MODE ?? 'dev',
     googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-    googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? 'http://localhost:3000/api/auth/google-callback',
-    googleWorkspaceDomain: process.env.GOOGLE_WORKSPACE_DOMAIN ?? 'example.com',
+    googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? 'https://localhost:3000/api/auth/google-callback',
+    googleWorkspaceDomain: process.env.GOOGLE_WORKSPACE_DOMAIN ?? '',
     allowDevAuth: process.env.ALLOW_DEV_AUTH === 'true',
     tfdaAutoDownload: process.env.TFDA_AUTO_DOWNLOAD === 'true',
     tfdaNutrientXlsxUrl: process.env.TFDA_NUTRIENT_XLSX_URL ?? 'https://consumer.fda.gov.tw/uc/GetFile.ashx?type=ServerFile&id=4862259227103213368',
     internalWorkerToken: process.env.INTERNAL_WORKER_TOKEN ?? '',
     public: {
+      authMode: process.env.AUTH_MODE ?? 'dev',
       aiProcessingMode: process.env.AI_EGRESS_MODE === 'cloud-approved' ? 'cloud' : 'local'
     }
   },

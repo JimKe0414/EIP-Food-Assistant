@@ -8,7 +8,7 @@ describe('AI provider contract', () => {
     const provider = new StubAiProvider()
     expect(mealAnalysisResultSchema.parse(await provider.analyzeMeal({ text: '雞肉便當' })).candidates).toHaveLength(1)
     expect(transcriptionResultSchema.parse(await provider.transcribeMeal()).text).toBeTruthy()
-    expect(lunchRecommendationSchema.parse(await provider.recommendLunch({ goal: '均衡', candidateIds: ['eip:1'], recentMealNames: [], nutrientTargets: {} })).candidateIds).toEqual(['eip:1'])
+    expect(lunchRecommendationSchema.parse(await provider.recommendLunch({ goal: '均衡', foodType: 'veg', candidateIds: ['eip:1'], candidates: [], recentMealNames: [], nutrientTargets: {} })).candidateIds).toEqual(['eip:1'])
   })
 
   it('rejects invalid model output and cloud providers in local-only mode', () => {
