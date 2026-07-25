@@ -1,6 +1,18 @@
 # TODO — 本機驗證與功能開發進度
 
-> 最後更新 2026-07-20。給明天接續用,也給隊友看目前狀態。
+> 最後更新 2026-07-25。給明天接續用,也給隊友看目前狀態。
+>
+> **要準備跟隊友合併、交接公司環境部署的人，先看 [DEPLOYMENT-HANDOFF.md](DEPLOYMENT-HANDOFF.md)**——那份文件整理了雲端 API 目前卡在哪（403，IP 白名單問題）、語音辨識為什麼不能直接搬過去、公司 DGX 資源要注意什麼，這份 TODO.md 只留逐次修復/驗證的操作紀錄，兩份文件分工不重複。
+
+## 2026-07-25：測試公司雲端 Qwen API，卡在 403（IP 白名單）
+
+拿到測試 key 後把 `.env` 切到雲端組（`AI_EGRESS_MODE=cloud-approved` + `AI_TEXT_PROVIDER`/`AI_VISION_PROVIDER=openai-compatible`），實測直接收到 `403 Forbidden`——判斷是這台機器的來源 IP 不在對方白名單。**這不是程式碼問題，需要請公司 IT／API 管理者把之後正式部署主機的 IP 加進允許清單**（不是這次測試失敗的這台開發機的 IP，部署到公司環境後對外 IP 會不一樣），詳細寫在 [DEPLOYMENT-HANDOFF.md](DEPLOYMENT-HANDOFF.md) 第 2 節。
+
+順手做了兩個錯誤訊息改善（之後任何人測雲端 API 失敗都受益）：
+- [`base.ts`](server/services/ai/base.ts) 呼叫失敗時，把上游回傳內容（最多 500 字）一起包進錯誤訊息，不再只有 HTTP 狀態碼
+- [`jobs/[id].get.ts`](server/api/jobs/[id].get.ts) 把 pg-boss 存的真實失敗訊息傳回前端，不再是寫死的「AI task failed」
+
+`.env` 現在已經切回地端組（key 也改回佔位字串），把地端／雲端兩組設定整理成註解區塊方便之後切換，用法見 [DEPLOYMENT-HANDOFF.md](DEPLOYMENT-HANDOFF.md) 第 1 節。
 
 ## 分支與 push 狀態
 
@@ -56,6 +68,26 @@
 - ⚠️ **新發現：`qwen2.5:7b` 常常認錯食物**——輸入「白飯一碗」，模型卻回「牛肉麵」（資料庫裡根本沒有「牛肉麵」這筆，`findBestFoodMatch` 模糊比對硬是配到別的相近名稱，導致「數字看起來精確、但方向就已經錯了」）。確認了比對/資料庫這條管線本身是對的（有查到帶小數點的真實資料），問題出在**小模型本身識別不準**，跟第一期做的比對邏輯是兩回事
 - 這代表「量的精確度」要處理，得先解決「食物辨識準確度」，不然份量算得再準也是算在錯的食物上。方向大概兩個：(1) 開發時直接用準確度更高的模型（`qwen2.5:14b`，本機也有）；(2) `findBestFoodMatch` 的比對門檻/邏輯可能也要收緊，不要讓不夠像的名稱也配對成功
 
+## 2026-07-23 補充：語音輸入接上真的 whisper.cpp，本機驗證過辨識準確
+
+`AI_AUDIO_PROVIDER=stub` 之前只驗證過機制（錄音→job→分析），內容是固定假文字。這次改成本機自己編一份 [whisper.cpp](https://github.com/ggml-org/whisper.cpp) 的 `examples/server`，原生跑在 Windows 主機上（不是 Docker），新增 `server/services/ai/whisper-cpp.ts` provider 讓 worker 透過 `host.docker.internal` 連過去。**實測：講中文，候選卡片內容跟講的話對得上，確認真的辨識準確，不是只有機制通。**
+
+- ✅ 新增 `WhisperCppProvider`（`whisper-cpp.ts`），`ProviderName`/`createAiProvider` 都已註冊，`AI_AUDIO_PROVIDER=whisper-cpp` 可用，`WHISPER_BASE_URL` 沿用同一個環境變數（跟 `local-whisper` 共用，同時只會啟用一個）
+- ⚠️ **踩坑一：Windows 把 8080 port 保留給 Hyper-V/Docker NAT**，whisper.cpp server 綁定 `--port 8080` 會直接失敗（`couldn't bind to server socket`）。用 `netsh interface ipv4 show excludedportrange protocol=tcp` 可以查出哪些範圍被排除，本機最後改用 `9000`
+- ⚠️ **踩坑二：whisper.cpp 只認得原始 WAV/PCM**，瀏覽器 `MediaRecorder` 錄音預設是 WebM/Opus，直接丟給 whisper.cpp 會報 `failed to decode audio data from memory buffer`。修法是在 `whisper-cpp.ts` 裡先用 `ffmpeg` 把音檔轉成 16kHz mono WAV 再上傳，`worker-runtime` 這個 Docker stage 也補裝了 `ffmpeg`（faster-whisper 那條路不會踩到這個問題，因為它底層本來就有更完整的解碼能力）
+- ⚠️ **這整套是本機測試用的，不代表正式環境部署方式**：whisper.cpp 是 Windows 原生執行檔，不在任何 Docker image 裡，正式環境如果 Linux 主機要用同一份，得另外寫 Linux 版 Dockerfile 重新編譯——這是接下來要做的事（見下方待辦）
+
+## 2026-07-23 補充：照片辨識接上真的視覺模型，順便修掉逾時問題
+
+發現照片辨識一直回傳一模一樣的結果，不管拍什麼都是「照片中的餐點」、520 kcal 那組固定值——查證後是 `AI_VISION_PROVIDER` 從頭到尾都還是 `stub`（`stub.ts` 的 `analyzeMeal()` 對圖片輸入本來就是回傳寫死的假資料，之前只有 `AI_TEXT_PROVIDER` 換成過 `ollama`，視覺這條線沒人記得換）。
+
+- ✅ 本機 Ollama 的 `qwen3.5:9b` 本身就有 `vision` 能力（`ollama list` API 回傳的 `capabilities` 裡看得到），不用額外下載模型，`.env` 改成 `AI_VISION_PROVIDER=ollama`、`AI_VISION_MODEL=qwen3.5:9b` 即可
+- ✅ 順便處理掉最上面「接下來」清單裡一直沒做的那項：`ollama.ts`/`openai-compatible.ts` 的 `analyzeMeal()` 逾時從寫死的 30 秒拉長到 90 秒——`qwen3.5:9b` 是 thinking 模型，回答前會先想一段時間，30 秒本來就不夠，這也是公司正式環境 `-thinking` 模型會遇到的同一個問題
+- ⚠️ **接上後第一次真的用手機照片測試直接失敗（`AI TASK FAILED`）**，查 Ollama 自己的 server log（`%LOCALAPPDATA%\Ollama\server.log`）才看到真正原因，是兩個問題疊在一起：
+  1. Ollama 呼叫預設的上下文視窗只有 **4096 tokens**，真實照片編碼成 base64 塞進 prompt 後輕鬆超過（log：`request (4357 tokens) exceeds the available context size (4096 tokens)`），直接 400 失敗——`ollama.ts` 原本沒有帶 `options.num_ctx`，已改成明確帶 `16384`
+  2. 就算上下文夠大，`qwen3.5:9b` 這個 thinking 模型對這個任務會陷入長篇「自我懷疑」式的思考迴圈，實測一張測試小圖它想了 4000+ token 也沒真的給出答案，直接把輸出額度燒光——已在請求加 `think: false` 關掉思考模式，同一張測試圖改善後 5 秒內就給出乾淨的 JSON
+  3. 這兩個修正都在 `ollama.ts` 的 `chat()`，`openai-compatible.ts` 目前沒有equivalent的 `think` 參數可關（OpenAI 相容 API 沒這個欄位），公司雲端 `-thinking` 模型如果之後也出現同樣的「想很久但沒答案」問題，需要另外想辦法（例如 prompt 明確要求不要展示思考過程，或看雲端 API 是否有對應參數）
+
 ## 已知問題，還沒處理
 
 - ⚠️ CSP 行內樣式問題可能不只一處，今天只確認修了會擋住錄音流程那一個，其他頁面可能還有沒踩到的殘留問題
@@ -66,7 +98,7 @@
 
 - [ ] 決定怎麼處理食物辨識準確度問題（換模型 / 收緊比對門檻，見上）
 - [ ] 把這次的新 commit push 到 fork
-- [ ] 把 `ollama.ts`/`openai-compatible.ts` 寫死的 30 秒逾時改成可設定、拉長，讓 thinking 類模型（本機 `qwen3.5:9b`、公司的 `-thinking`）跑得完
 - [ ] 拿到公司真的 API key 後，測試雲端 Qwen provider
 - [ ] 第二期：拍照辨識的份量範圍選擇 UI（一碗/半碗/四分之一碗）
 - [ ] 全頁面走一輪，確認畫面跟 Console 都乾淨
+- [ ] 幫 whisper.cpp 寫一份 Linux 版 Dockerfile，讓語音辨識也能跟著 `docker compose build` 走，而不是綁死在這台 Windows 機器上手動編譯的執行檔
