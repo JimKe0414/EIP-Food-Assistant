@@ -8,10 +8,12 @@ const meal = ref(String(route.query.meal ?? 'breakfast'))
 const content = ref('')
 const loading = ref(false)
 const error = ref('')
+const queueDepth = ref<number>()
 const candidates = ref<MealCandidate[]>([])
 const summary = ref<string | null>(null)
 const { analyzeText } = useApi()
 const { multiplierFor, setMultiplier, gramsInputFor, setGrams, reset: resetPortions } = usePortionAdjustment()
+const totalCalories = computed(() => candidates.value.reduce((sum, candidate) => sum + scaleNutrients(candidate.nutrients, multiplierFor(candidate.name)).caloriesKcal, 0))
 
 async function analyze() {
   error.value = ''
@@ -22,14 +24,16 @@ async function analyze() {
     return
   }
   loading.value = true
+  queueDepth.value = undefined
   try {
-    const result = await analyzeText(content.value)
+    const result = await analyzeText(content.value, progress => { queueDepth.value = progress.queueDepth })
     candidates.value = result.candidates
     summary.value = result.summary
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : '分析失敗，請確認已登入後再試一次'
   } finally {
     loading.value = false
+    queueDepth.value = undefined
   }
 }
 
@@ -59,11 +63,14 @@ function confirm(candidate: MealCandidate) {
     <label>備註<input placeholder="可補充份量、烹調方式等"></label>
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
     <button class="button button--primary button--wide" type="submit" :disabled="loading">{{ loading ? '分析中…' : '產生候選並分析' }}</button>
+    <p v-if="queueDepth" class="queue-hint">前面還有 {{ queueDepth }} 個任務在處理，請耐心等候</p>
+    <p v-if="!loading && !candidates.length && summary" class="empty-note">{{ summary }}</p>
     <section v-if="candidates.length" class="candidate-list" aria-label="餐食候選清單">
+      <div v-if="candidates.length > 1" class="candidate-total"><span>本次辨識共 {{ candidates.length }} 項食材，總熱量</span><b>{{ Math.round(totalCalories) }} kcal</b></div>
       <article v-for="candidate in candidates" :key="candidate.name" class="candidate-result">
         <div class="detected-food">
           <Icon name="solar:check-circle-linear" />
-          <div><input v-model="candidate.name" aria-label="候選餐點名稱"><span>信心值 {{ Math.round(candidate.confidence * 100) }}%・{{ scaleNutrients(candidate.nutrients, multiplierFor(candidate.name)).caloriesKcal }} kcal</span></div>
+          <div><input v-model="candidate.name" aria-label="候選餐點名稱"><span>信心值 {{ Math.round(candidate.confidence * 100) }}%</span></div>
           <button type="button" class="button button--primary button--small" @click="confirm(candidate)">確認</button>
         </div>
         <div class="portion-select" role="radiogroup" :aria-label="`${candidate.name} 份量調整`">
@@ -87,6 +94,7 @@ function confirm(candidate: MealCandidate) {
             >
           </label>
         </div>
+        <div class="nutrition-grid"><div class="kcal"><span>熱量</span><b>{{ scaleNutrients(candidate.nutrients, multiplierFor(candidate.name)).caloriesKcal }}</b></div><div><span>蛋白質</span><b>{{ scaleNutrients(candidate.nutrients, multiplierFor(candidate.name)).proteinG ?? '—' }} g</b></div><div><span>碳水</span><b>{{ scaleNutrients(candidate.nutrients, multiplierFor(candidate.name)).carbsG ?? '—' }} g</b></div><div><span>脂肪</span><b>{{ scaleNutrients(candidate.nutrients, multiplierFor(candidate.name)).fatG ?? '—' }} g</b></div></div>
       </article>
     </section>
   </form>

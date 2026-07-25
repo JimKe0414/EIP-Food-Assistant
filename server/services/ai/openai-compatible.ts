@@ -32,7 +32,10 @@ export class OpenAiCompatibleProvider implements AiProvider {
           { type: 'image_url', image_url: { url: `data:${input.mimeType};base64,${input.imageBase64}` } }
         ]
       : input.text
-    const content = await this.chat(input.imageBase64 ? this.options.visionModel : this.options.textModel, mealSystemPrompt, userContent, 30_000)
+    // Same rationale as ollama.ts: thinking-variant models (e.g. Qwen's "-thinking" models)
+    // need more than 30s to spend part of the budget on chain-of-thought before answering, and
+    // text-dense images (e.g. a nutrition label) push this further still.
+    const content = await this.chat(input.imageBase64 ? this.options.visionModel : this.options.textModel, mealSystemPrompt, userContent, 150_000)
     return mealAnalysisResultSchema.parse(parseJsonContent(content))
   }
 

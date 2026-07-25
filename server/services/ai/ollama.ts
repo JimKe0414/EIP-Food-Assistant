@@ -21,7 +21,11 @@ export class OllamaAiProvider implements AiProvider {
 
   async analyzeMeal(input: TextOrImage) {
     const model = input.imageBase64 ? this.options.visionModel : this.options.textModel
-    const content = await this.chat(model, mealSystemPrompt, input.text || 'Analyze this meal image.', input.imageBase64 ? [input.imageBase64] : undefined, 30_000)
+    // "Thinking" models (e.g. qwen3.5's vision-capable build) spend a chunk of the timeout on
+    // chain-of-thought before answering — 30s was cutting them off before a response arrived.
+    // Text-dense images (e.g. a nutrition label) push this further still (observed ~90s+ vs
+    // ~20-30s for a plain food photo), so the ceiling needs real headroom above the common case.
+    const content = await this.chat(model, mealSystemPrompt, input.text || 'Analyze this meal image.', input.imageBase64 ? [input.imageBase64] : undefined, 150_000)
     return mealAnalysisResultSchema.parse(parseJsonContent(content))
   }
 
@@ -49,6 +53,13 @@ export class OllamaAiProvider implements AiProvider {
           model,
           stream: false,
           format: 'json',
+          // Ollama's default context window (4096 tokens) is too small once a real photo's
+          // image tokens are added to the system+user prompt, causing an immediate 400
+          // ("exceeds the available context size"). think:false skips chain-of-thought for
+          // reasoning-capable models (e.g. qwen3.5) — observed spending its entire output
+          // budget on self-doubting "thinking" text and never emitting the actual answer.
+          options: { num_ctx: 16384 },
+          think: false,
           messages: [{ role: 'system', content: system }, { role: 'user', content: prompt, images }]
         })
       },

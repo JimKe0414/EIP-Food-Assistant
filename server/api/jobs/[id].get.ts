@@ -14,6 +14,15 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Job not found' })
   }
 
+  // The AI queue processes strictly one job at a time (see worker/index.ts's localConcurrency:1
+  // guard), so while your own job is still waiting/running, "how many others are ready or
+  // active right now" is a fair "you're queued, not stuck" signal for the client to show.
+  let queueDepth: number | undefined
+  if (job.state !== 'completed' && job.state !== 'failed') {
+    const [stats] = await boss.getQueueStats(AI_QUEUE, { force: true })
+    queueDepth = stats ? Math.max(0, stats.readyCount + stats.activeCount - 1) : undefined
+  }
+
   let output = job.state === 'completed' ? job.output : undefined
   if (job.state === 'completed' && data.data.type === 'recommendLunch') {
     const parsed = lunchRecommendationSchema.safeParse(output)
@@ -29,11 +38,19 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // pg-boss stores { message, stack } as the job's output when a handler throws — surface the
+  // real message (e.g. "HTTP 403: IP not allowed") instead of a one-size-fits-all string, so a
+  // config/auth/rate-limit problem is diagnosable from the UI instead of requiring a DB query.
+  const failureMessage = job.state === 'failed' && job.output && typeof job.output === 'object' && 'message' in job.output
+    ? String((job.output as { message?: unknown }).message)
+    : 'AI task failed'
+
   return {
     id: job.id,
     state: job.state,
     output,
-    error: job.state === 'failed' ? { code: 'AI_JOB_FAILED', message: 'AI task failed' } : undefined,
+    queueDepth,
+    error: job.state === 'failed' ? { code: 'AI_JOB_FAILED', message: failureMessage } : undefined,
     createdAt: job.createdOn,
     completedAt: job.completedOn
   }

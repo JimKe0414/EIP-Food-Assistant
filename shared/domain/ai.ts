@@ -21,7 +21,10 @@ export const mealCandidateSchema = z.object({
 })
 
 export const mealAnalysisResultSchema = z.object({
-  candidates: z.array(mealCandidateSchema).min(1).max(10),
+  // Empty is a valid, expected outcome — a photo/description with no identifiable food should
+  // report zero candidates rather than the model inventing a plausible-looking guess to satisfy
+  // a non-empty requirement (see mealSystemPrompt's explicit "no food visible" instruction).
+  candidates: z.array(mealCandidateSchema).min(0).max(10),
   summary: z.string().trim().min(1).max(500)
 })
 
