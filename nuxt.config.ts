@@ -19,9 +19,11 @@ export default defineNuxtConfig({
     tfdaAutoDownload: process.env.TFDA_AUTO_DOWNLOAD === 'true',
     tfdaNutrientXlsxUrl: process.env.TFDA_NUTRIENT_XLSX_URL ?? 'https://consumer.fda.gov.tw/uc/GetFile.ashx?type=ServerFile&id=4862259227103213368',
     internalWorkerToken: process.env.INTERNAL_WORKER_TOKEN ?? '',
+    appTimeZone: process.env.APP_TIME_ZONE ?? 'Asia/Taipei',
     public: {
       authMode: process.env.AUTH_MODE ?? 'dev',
-      aiProcessingMode: process.env.AI_EGRESS_MODE === 'cloud-approved' ? 'cloud' : 'local'
+      aiProcessingMode: process.env.AI_EGRESS_MODE === 'cloud-approved' ? 'cloud' : 'local',
+      appTimeZone: process.env.APP_TIME_ZONE ?? 'Asia/Taipei'
     }
   },
   pwa: {

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { Metric } from '~/types/diet'
+import type { DashboardSummary } from '~/types/dashboard'
 
 const labels = ['一', '二', '三', '四', '五', '六', '日']
-const { data: summary } = await useFetch('/api/meals/summary')
+const { data: summary } = await useFetch<DashboardSummary>('/api/meals/summary', { key: 'meal-summary' })
 
 const daily = computed(() => summary.value?.daily ?? [])
 const targets = computed(() => summary.value?.targets ?? null)

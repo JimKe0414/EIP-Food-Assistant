@@ -16,7 +16,7 @@ import {
 
 export const sexEnum = pgEnum('sex', ['male', 'female'])
 export const mealTypeEnum = pgEnum('meal_type', ['breakfast', 'lunch', 'dinner', 'snack'])
-export const mealSourceEnum = pgEnum('meal_source', ['manual', 'photo', 'voice', 'eip', 'custom'])
+export const mealSourceEnum = pgEnum('meal_source', ['manual', 'photo', 'voice', 'eip', 'custom', 'tfda'])
 export const foodTypeEnum = pgEnum('food_type', ['meat', 'veg', 'unknown'])
 export const syncStatusEnum = pgEnum('sync_status', ['success', 'no_change', 'failed'])
 
@@ -28,6 +28,13 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 }, table => [uniqueIndex('users_identity_hmac_uidx').on(table.identityHmac)])
+
+export const userPreferences = pgTable('user_preferences', {
+  userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  healthGoal: varchar('health_goal', { length: 40 }).notNull().default('均衡飲食'),
+  reminderEnabled: boolean('reminder_enabled').notNull().default(true),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+})
 
 export const profileSnapshots = pgTable('profile_snapshots', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -57,8 +64,12 @@ export const meals = pgTable('meals', {
   sodiumMg: numeric('sodium_mg', { precision: 9, scale: 2 }),
   confidence: numeric('confidence', { precision: 4, scale: 3 }),
   summary: varchar('summary', { length: 500 }),
+  clientRequestId: varchar('client_request_id', { length: 100 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-}, table => [index('meals_user_date_idx').on(table.userId, table.mealDate)])
+}, table => [
+  index('meals_user_date_idx').on(table.userId, table.mealDate),
+  uniqueIndex('meals_user_client_request_uidx').on(table.userId, table.clientRequestId)
+])
 
 export const customFoods = pgTable('custom_foods', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -153,7 +164,10 @@ export const mealImportBatches = pgTable('meal_import_batches', {
   fileHash: varchar('file_hash', { length: 64 }).notNull(),
   rowCount: integer('row_count').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-}, table => [index('meal_import_batches_user_idx').on(table.userId)])
+}, table => [
+  index('meal_import_batches_user_idx').on(table.userId),
+  uniqueIndex('meal_import_batches_user_hash_uidx').on(table.userId, table.fileHash)
+])
 
 // Tracks food names the AI produced that either matched nothing in `nutrients`, or only
 // matched weakly (findBestFoodMatch found something, but the name is different enough that

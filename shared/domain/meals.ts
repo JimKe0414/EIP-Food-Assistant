@@ -2,9 +2,10 @@ import { z } from 'zod'
 import { nutrientSummarySchema } from './ai'
 
 export const mealInputSchema = z.object({
+  clientRequestId: z.string().trim().min(1).max(100).optional(),
   mealDate: z.iso.date(),
   mealType: z.enum(['breakfast', 'lunch', 'dinner', 'snack']),
-  source: z.enum(['manual', 'photo', 'voice', 'eip', 'custom']),
+  source: z.enum(['manual', 'photo', 'voice', 'eip', 'custom', 'tfda']),
   name: z.string().trim().min(1).max(160),
   confidence: z.number().min(0).max(1).nullable().optional(),
   confirmed: z.literal(true),

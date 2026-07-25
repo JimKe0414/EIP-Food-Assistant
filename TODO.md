@@ -6,13 +6,13 @@
 
 ## 2026-07-25：測試公司雲端 Qwen API，卡在 403（IP 白名單）
 
-拿到測試 key 後把 `.env` 切到雲端組（`AI_EGRESS_MODE=cloud-approved` + `AI_TEXT_PROVIDER`/`AI_VISION_PROVIDER=openai-compatible`），實測直接收到 `403 Forbidden`——判斷是這台機器的來源 IP 不在對方白名單。**這不是程式碼問題，需要請公司 IT／API 管理者把之後正式部署主機的 IP 加進允許清單**（不是這次測試失敗的這台開發機的 IP，部署到公司環境後對外 IP 會不一樣），詳細寫在 [DEPLOYMENT-HANDOFF.md](DEPLOYMENT-HANDOFF.md) 第 2 節。
+拿到測試 key 後把 `.env` 切到雲端組（`AI_EGRESS_MODE=cloud-approved` + `AI_TEXT_PROVIDER`/`AI_VISION_PROVIDER=openai-compatible`），實測直接收到 `403 Forbidden`——判斷是這台機器的來源 IP 不在對方白名單。**這不是程式碼問題，需要請公司 IT／API 管理者把之後正式部署主機的 IP 加進允許清單**（不是這次測試失敗的這台開發機的 IP，部署到公司環境後對外 IP 會不一樣），詳細寫在 [DEPLOYMENT-HANDOFF.md](DEPLOYMENT-HANDOFF.md) 第 3 節。
 
 順手做了兩個錯誤訊息改善（之後任何人測雲端 API 失敗都受益）：
 - [`base.ts`](server/services/ai/base.ts) 呼叫失敗時，把上游回傳內容（最多 500 字）一起包進錯誤訊息，不再只有 HTTP 狀態碼
 - [`jobs/[id].get.ts`](server/api/jobs/[id].get.ts) 把 pg-boss 存的真實失敗訊息傳回前端，不再是寫死的「AI task failed」
 
-`.env` 現在已經切回地端組（key 也改回佔位字串），把地端／雲端兩組設定整理成註解區塊方便之後切換，用法見 [DEPLOYMENT-HANDOFF.md](DEPLOYMENT-HANDOFF.md) 第 1 節。
+這是當時的紀錄：`.env` 曾切回地端組（key 也改回佔位字串）。2026-07-25 再確認時，三種 provider 目前都是 `stub`；實際現況與切換注意事項見 [DEPLOYMENT-HANDOFF.md](DEPLOYMENT-HANDOFF.md) 第 2 節。
 
 ## 分支與 push 狀態
 
@@ -91,7 +91,9 @@
 ## 已知問題，還沒處理
 
 - ⚠️ CSP 行內樣式問題可能不只一處，今天只確認修了會擋住錄音流程那一個，其他頁面可能還有沒踩到的殘留問題
-- ⚠️ `pages/index.vue`、`recommend.vue`、`trend.vue` 還在用 `~/data/mock` 假資料，樣式對齊 PM 原型但內容邏輯還沒串
+- ✅ 2026-07-25：`pages/index.vue`、`recommend.vue`、`trend.vue`、個人資料與時間顯示已改接 DB，`data/mock.ts` 已刪除；餐食確認、推薦確認與 EIP 匯入都有重複提交保護
+- ⚠️ 飲水量、蔬菜份數、體重趨勢、均衡分數與實際提醒排程尚未實作；畫面只標示「尚未推出」，不顯示假數字
+- ⚠️ 目前 checkout 的三種 AI provider 都是 `stub`；DB 寫入是真實的，但正式驗收辨識品質前要切成核准的地端或雲端 provider
 - ⚠️ 原生 Windows `pnpm dev` 的框架 bug 還沒解決，之後想拿回 HMR 要另外處理
 
 ## 接下來（依 [FEATURE-PLAN.md](FEATURE-PLAN.md) 分期）
@@ -99,6 +101,7 @@
 - [ ] 決定怎麼處理食物辨識準確度問題（換模型 / 收緊比對門檻，見上）
 - [ ] 把這次的新 commit push 到 fork
 - [ ] 拿到公司真的 API key 後，測試雲端 Qwen provider
-- [ ] 第二期：拍照辨識的份量範圍選擇 UI（一碗/半碗/四分之一碗）
-- [ ] 全頁面走一輪，確認畫面跟 Console 都乾淨
+- [x] 第二期簡化版：份量倍率與直接輸入克數
+- [x] 首頁、記錄、推薦、趨勢、個人資料走查；本次瀏覽器 Console 無錯誤
+- [ ] 新增飲水量、蔬菜份數、體重趨勢、均衡分數與實際提醒排程
 - [ ] 幫 whisper.cpp 寫一份 Linux 版 Dockerfile，讓語音辨識也能跟著 `docker compose build` 走，而不是綁死在這台 Windows 機器上手動編譯的執行檔

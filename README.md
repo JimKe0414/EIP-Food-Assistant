@@ -7,6 +7,7 @@
 - 五頁獨立路由與共用元件：首頁、餐食記錄、午餐推薦、趨勢、個人資料。
 - mobile / tablet / desktop / wide 四段 RWD，桌面側欄、wide 資訊欄、鍵盤 focus trap、reduced motion。
 - 文字、照片、麥克風輸入 → AI 候選 → 使用者確認 → 正式餐食 API；文字可離線暫存並背景同步。
+- 首頁、今日餐食、近 7 日趨勢、個人快照、健康目標、提醒偏好與午餐候選均由 PostgreSQL 讀取；餐食、推薦確認與 EIP 匯入具重複提交保護。
 - PostgreSQL schema、快照式個人資料、HMAC 身分、強制 RLS 與可校驗 migration runner。
 - Google Workspace OAuth（state + PKCE）、CSRF、CSP nonce、HTTP 方法／路徑／smuggling 防護。
 - Ollama、local-whisper、OpenAI-compatible、Google GenAI Provider 與共用 Zod contract。
@@ -95,14 +96,14 @@ OPENAI_COMPAT_TEXT_MODEL=Qwen3.6-35B-A3B-thinking
 OPENAI_COMPAT_MAX_TOKENS=4096
 ```
 
-不啟動資料庫也能使用四筆固定假菜單直接測試 API：
+開發者仍可用獨立腳本直接測試 FocusIT API；這不會寫入應用程式資料庫，也不會出現在使用者畫面：
 
 ```bash
 pnpm test:api:lunch
 ```
 
 測試指令會從同一個 secret 檔或 `OPENAI_COMPAT_API_KEY` 環境變數讀取 key，不會輸出 key。
-完整系統啟動後，也可登入 `/recommend`，按「假資料測試 API」從前端走完整的 Web API、queue、worker 與 FocusIT 回傳流程。
+完整系統的 `/recommend` 只使用登入者可見的 DB 候選；DB 沒有當日菜單時會顯示 0 筆，不會自動放入固定假菜單。
 
 ## 登入與資料匯入
 

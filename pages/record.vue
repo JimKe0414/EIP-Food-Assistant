@@ -17,14 +17,17 @@ async function saved(payload?: MealInput) {
     return
   }
   try {
+    const persistedPayload: MealInput = {
+      ...payload,
+      clientRequestId: payload.clientRequestId ?? crypto.randomUUID()
+    }
     if (!navigator.onLine) {
-      await queueMeal(payload)
+      await queueMeal(persistedPayload)
       notify('已暫存，連線後自動上傳')
     } else {
-      await post('/api/meals', payload)
-      const count = Number(localStorage.getItem('food:meal-count') ?? 0) + 1
-      localStorage.setItem('food:meal-count', String(count))
+      await post('/api/meals', persistedPayload)
       notify(payload.summary ? `餐食已加入今日紀錄：${payload.summary}` : '餐食已加入今日紀錄')
+      await refreshNuxtData('meal-summary')
     }
   } catch {
     notify('儲存失敗，請先登入或稍後再試')

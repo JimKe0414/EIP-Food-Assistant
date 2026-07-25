@@ -38,7 +38,7 @@ async function logout() {
 
     <div v-if="session?.authenticated" class="account-card">
       <div class="avatar">我</div>
-      <div><b>Workspace 使用者</b><span>{{ session.emailDomain }}</span></div>
+      <div><b>已登入使用者</b><span>{{ session.emailDomain }}</span></div>
       <button type="button" aria-label="登出" @click="logout"><Icon name="solar:logout-2-linear" /></button>
     </div>
     <NuxtLink v-else class="button button--soft button--wide" to="/login">登入</NuxtLink>

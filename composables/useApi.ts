@@ -12,9 +12,12 @@ export type JobProgress = { queueDepth?: number }
 
 interface LunchCandidateResponse {
   id: string
+  source: 'eip' | 'custom' | 'tfda'
   name: string
   caloriesKcal: number
   proteinG: number | null
+  fatG: number | null
+  carbsG: number | null
 }
 
 interface LunchRecommendationOutput {
@@ -24,6 +27,7 @@ interface LunchRecommendationOutput {
 
 export function useApi() {
   let csrfToken: string | undefined
+  const { todayDate } = useAppDate()
 
   async function post<T>(url: string, body?: Record<string, any>) {
     csrfToken ||= (await $fetch<{ token: string }>('/api/csrf-token')).token
@@ -67,7 +71,7 @@ export function useApi() {
     return waitForJob<TranscriptionResult>(queued.statusUrl, 240_000, onProgress)
   }
 
-  async function recommendLunch(goal: string, foodType: FoodType, useMockData = false) {
+  async function recommendLunch(goal: string, foodType: FoodType, useMockData = false, serviceDate = todayDate()) {
     const queued = await post<{
       statusUrl: string
       candidates: LunchCandidateResponse[]
@@ -77,13 +81,17 @@ export function useApi() {
       goal,
       foodType,
       useMockData,
-      serviceDate: new Date().toISOString().slice(0, 10)
+      serviceDate
     })
     const output = await waitForJob<LunchRecommendationOutput>(queued.statusUrl, 30_000)
     return { ...queued, output }
   }
 
-  return { post, postForm, waitForJob, analyzeText, analyzeImage, transcribeAudio, recommendLunch }
+  async function confirmLunch(candidateId: string, foodType: FoodType, serviceDate: string = todayDate(), clientRequestId: string = crypto.randomUUID()) {
+    return post('/api/recommend-lunch/confirm', { candidateId, foodType, serviceDate, clientRequestId })
+  }
+
+  return { post, postForm, waitForJob, analyzeText, analyzeImage, transcribeAudio, recommendLunch, confirmLunch }
 }
 
 export async function fileToBase64(file: Blob) {

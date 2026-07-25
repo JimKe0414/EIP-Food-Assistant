@@ -3,6 +3,7 @@ const online = ref(true)
 const installEligible = ref(false)
 const iosInstall = ref(false)
 const { $pwa } = useNuxtApp()
+const { data: summary } = await useFetch<{ totalMealCount: number }>('/api/meals/summary', { key: 'meal-summary' })
 
 const shouldInstall = computed(() => installEligible.value && Boolean($pwa?.showInstallPrompt) && !$pwa?.isPWAInstalled)
 const shouldShowIosGuide = computed(() => installEligible.value && iosInstall.value && !$pwa?.isPWAInstalled)
@@ -11,7 +12,7 @@ onMounted(() => {
   online.value = navigator.onLine
   const firstSeen = Number(localStorage.getItem('food:first-seen') ?? Date.now())
   if (!localStorage.getItem('food:first-seen')) localStorage.setItem('food:first-seen', String(firstSeen))
-  const mealCount = Number(localStorage.getItem('food:meal-count') ?? 0)
+  const mealCount = summary.value?.totalMealCount ?? 0
   const rejectedUntil = Number(localStorage.getItem('food:install-rejected-until') ?? 0)
   installEligible.value = (Date.now() - firstSeen >= 3 * 86_400_000 || mealCount >= 5) && Date.now() >= rejectedUntil
   iosInstall.value = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.matchMedia('(display-mode: standalone)').matches

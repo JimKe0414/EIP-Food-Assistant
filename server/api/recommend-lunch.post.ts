@@ -1,8 +1,19 @@
-import { and, desc, eq, gte, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm'
 import { customFoods, eipMenuItems, meals, nutrientVersions, nutrients, profileSnapshots } from '~/db/schema'
 import { calculateBodyMetrics } from '~/shared/domain/body-metrics'
 import { getMockLunchCandidates } from '~/server/services/lunch/mock-candidates'
 import { getTfdaFreshness } from '~/shared/domain/tfda'
+import { formatDateInTimeZone, shiftIsoDate } from '~/shared/domain/date'
+import { healthGoalSchema } from '~/shared/domain/preferences'
+import { lunchFoodTypeSchema } from '~/shared/domain/ai'
+import { z } from 'zod'
+
+const requestSchema = z.object({
+  goal: healthGoalSchema.default('均衡飲食'),
+  foodType: lunchFoodTypeSchema.default('meat'),
+  serviceDate: z.iso.date().optional(),
+  useMockData: z.boolean().default(false)
+})
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
@@ -12,11 +23,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 429, statusMessage: 'Too Many Requests' })
   }
 
-  const body = await readBody<{ goal?: string, foodType?: string, serviceDate?: string, useMockData?: boolean }>(event)
-  const serviceDate = body.serviceDate || new Date().toISOString().slice(0, 10)
-  const goal = String(body.goal || '均衡飲食').slice(0, 80)
-  const foodType = body.foodType === 'veg' ? 'veg' : 'meat'
-  const useMockData = body.useMockData === true
+  const body = await readValidatedBody(event, value => requestSchema.parse(value))
+  const serviceDate = body.serviceDate ?? formatDateInTimeZone(new Date(), useRuntimeConfig().appTimeZone)
+  const { goal, foodType, useMockData } = body
   const scoped = useMockData ? {
     freshness: getTfdaFreshness(new Date()),
     recent: foodType === 'veg'
@@ -26,14 +35,21 @@ export default defineEventHandler(async (event) => {
     eatenToday: null,
     candidates: getMockLunchCandidates(foodType)
   } : await withUserScope(user.id, async database => {
-    const eip = await database.select().from(eipMenuItems).where(and(eq(eipMenuItems.userId, user.id), eq(eipMenuItems.serviceDate, serviceDate))).limit(60)
-    const custom = eip.length ? [] : await database.select().from(customFoods).where(eq(customFoods.userId, user.id)).limit(60)
+    const eipFoodTypes = foodType === 'veg' ? ['veg'] as const : ['meat', 'unknown'] as const
+    const eip = await database.select().from(eipMenuItems).where(and(
+      eq(eipMenuItems.userId, user.id),
+      eq(eipMenuItems.serviceDate, serviceDate),
+      inArray(eipMenuItems.foodType, eipFoodTypes)
+    )).limit(60)
+    const custom = eip.length || foodType === 'veg'
+      ? []
+      : await database.select().from(customFoods).where(eq(customFoods.userId, user.id)).limit(60)
     const [version] = await database.select().from(nutrientVersions).orderBy(desc(nutrientVersions.syncedAt)).limit(1)
     const freshness = getTfdaFreshness(version?.syncedAt ?? null)
-    const publicFoods = eip.length || custom.length || freshness.status === 'expired'
+    const publicFoods = foodType === 'veg' || eip.length || custom.length || freshness.status === 'expired'
       ? []
       : await database.select().from(nutrients).limit(60)
-    const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10)
+    const sevenDaysAgo = shiftIsoDate(serviceDate, -6)
     const recent = await database.select({ name: meals.name }).from(meals).where(and(eq(meals.userId, user.id), gte(meals.mealDate, sevenDaysAgo))).orderBy(desc(meals.mealDate)).limit(50)
 
     const [snapshot] = await database.select().from(profileSnapshots).where(eq(profileSnapshots.userId, user.id)).orderBy(desc(profileSnapshots.measuredAt)).limit(1)

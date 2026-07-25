@@ -11,6 +11,7 @@ const queueDepth = ref<number>()
 const candidates = ref<MealCandidate[]>([])
 const summary = ref<string | null>(null)
 const { transcribeAudio, analyzeText } = useApi()
+const { todayDate } = useAppDate()
 const { multiplierFor, setMultiplier, gramsInputFor, setGrams, reset: resetPortions } = usePortionAdjustment()
 const totalCalories = computed(() => candidates.value.reduce((sum, candidate) => sum + scaleNutrients(candidate.nutrients, multiplierFor(candidate.name)).caloriesKcal, 0))
 let recorder: MediaRecorder | undefined
@@ -71,7 +72,7 @@ async function analyzeRecording() {
 function confirm(candidate: MealCandidate) {
   const factor = multiplierFor(candidate.name)
   emit('saved', {
-    mealDate: new Date().toISOString().slice(0, 10), mealType: 'lunch', source: 'voice',
+    mealDate: todayDate(), mealType: 'lunch', source: 'voice',
     name: candidate.name, confidence: candidate.confidence, confirmed: true, nutrients: scaleNutrients(candidate.nutrients, factor),
     summary: summary.value
   })

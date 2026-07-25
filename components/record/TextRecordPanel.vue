@@ -12,6 +12,7 @@ const queueDepth = ref<number>()
 const candidates = ref<MealCandidate[]>([])
 const summary = ref<string | null>(null)
 const { analyzeText } = useApi()
+const { todayDate } = useAppDate()
 const { multiplierFor, setMultiplier, gramsInputFor, setGrams, reset: resetPortions } = usePortionAdjustment()
 const totalCalories = computed(() => candidates.value.reduce((sum, candidate) => sum + scaleNutrients(candidate.nutrients, multiplierFor(candidate.name)).caloriesKcal, 0))
 
@@ -19,8 +20,7 @@ async function analyze() {
   error.value = ''
   resetPortions()
   if (!navigator.onLine) {
-    candidates.value = [{ name: content.value, portionDescription: null, estimatedGrams: null, confidence: 1, nutrients: { caloriesKcal: 0, proteinG: null, fatG: null, carbsG: null, fiberG: null, sodiumMg: null } }]
-    summary.value = null
+    error.value = '餐食分析需要網路連線；系統不會以 0 kcal 假資料建立紀錄'
     return
   }
   loading.value = true
@@ -40,7 +40,7 @@ async function analyze() {
 function confirm(candidate: MealCandidate) {
   const factor = multiplierFor(candidate.name)
   emit('saved', {
-    mealDate: new Date().toISOString().slice(0, 10),
+    mealDate: todayDate(),
     mealType: meal.value as MealInput['mealType'],
     source: 'manual',
     name: candidate.name,

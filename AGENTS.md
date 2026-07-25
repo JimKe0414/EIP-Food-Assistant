@@ -78,14 +78,15 @@
 
 - `auth/`：`dev.post`（開發登入）、`google.get` + `google-callback.get`（Google OAuth）、`session.get`、`logout.post`
 - `csrf-token.get`
-- `eip/import.post`、`eip/menu.post`：員工餐廳 CSV/XLSX 匯入與選單
+- `eip/import.post`、`eip/menu.get`、`eip/menu.post`：員工餐廳 CSV/XLSX 匯入與選單
 - `health.get`、`ready.get`：健康檢查（Docker healthcheck 用）
 - `internal/tfda-sync.post`：只給 worker 用內部 token 呼叫的內部端點
 - `jobs/[id].get`：查詢非同步 AI 任務狀態
-- `meals/index.get`、`meals/index.post`、`meals/analyze.post`
+- `meals/index.get`、`meals/index.post`、`meals/analyze.post`、`meals/summary.get`
 - `nutrients/index.get`
 - `profile/index.get`、`profile/index.post`
-- `recommend-lunch.post`
+- `preferences/index.get`、`preferences/index.post`
+- `recommend-lunch.post`、`recommend-lunch/confirm.post`
 - `tfda/sync.post`
 
 中介層執行順序由檔名數字前綴決定：`00.security.ts` → `01.csrf.ts`（全部 request 都會先經過這裡：CSRF、CSP nonce、HTTP method/path 防護、smuggling 防護等，對應 README 提到的安全機制）。
@@ -107,7 +108,8 @@
 |---|---|
 | `users` | 使用者（以 `identity_hmac` 做去識別化的身分識別，非明文 email） |
 | `profile_snapshots` | 個人身體數值快照（年齡/性別/身高/體重/體脂...），時間序列 |
-| `meals` | 使用者的餐食記錄（來源：manual/photo/voice/eip/custom） |
+| `user_preferences` | 健康目標與提醒開關；依使用者保存 |
+| `meals` | 使用者的餐食記錄（來源：manual/photo/voice/eip/custom/tfda），`client_request_id` 防止重複提交 |
 | `custom_foods` | 使用者自訂食物 |
 | `eip_menu_items` | 員工餐廳（EIP）當日菜單匯入資料 |
 | `eip_orders` | 員工餐廳訂餐記錄匯入資料 |
@@ -120,7 +122,7 @@
 
 ### 重要：Row-Level Security（RLS）
 
-`meals`、`custom_foods`、`profile_snapshots`、`eip_menu_items`、`eip_orders`、`meal_import_batches` 都開了 **`ENABLE ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY`**，policy 綁定 Postgres session 變數 `app.current_user_id`。意味著：**就算 API 程式碼寫錯、忘記加 WHERE user_id = ...，資料庫層也會擋掉跨使用者存取**。這是這個專案的核心安全設計，之後你自己建表／改表時要留意是否也要套用同樣的 RLS pattern（可以參考 `db/migrations/0000_initial.sql` 第 90 行左右的 policy 產生邏輯）。
+`meals`、`custom_foods`、`profile_snapshots`、`user_preferences`、`eip_menu_items`、`eip_orders`、`meal_import_batches` 都開了 **`ENABLE ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY`**，policy 綁定 Postgres session 變數 `app.current_user_id`。意味著：**就算 API 程式碼寫錯、忘記加 WHERE user_id = ...，資料庫層也會擋掉跨使用者存取**。這是這個專案的核心安全設計，之後你自己建表／改表時要留意是否也要套用同樣的 RLS pattern（可以參考 `db/migrations/0000_initial.sql` 第 90 行左右的 policy 產生邏輯）。
 
 ### 建表 / 加欄位的正確流程
 
