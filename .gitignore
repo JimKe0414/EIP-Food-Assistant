@@ -3,6 +3,7 @@
 node_modules
 .pnpm-store
 .data
+.vs
 .env
 .env.*
 !.env.example

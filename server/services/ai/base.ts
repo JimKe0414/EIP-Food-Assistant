@@ -58,8 +58,14 @@ photo) or the text describes no food, return an empty candidates array — do no
 food guess just to have something to return. In that case, summary must explain that no food was detected.
 Use null for a nutrient value when it cannot be estimated. Do not provide medical diagnosis.`
 
-export const recommendationSystemPrompt = `Select only candidate IDs present in candidateIds. Return JSON only:
-{"candidateIds":["uuid"],"reasonById":{"uuid":"short reason"}}. Never invent IDs.
+export const recommendationSystemPrompt = `Recommend up to three lunch candidates using foodType, the goal, candidate nutrition details, recent meals, and nutrient targets.
+Rules:
+1. Select only IDs present in candidateIds. Never invent IDs.
+2. When foodType is "veg", select vegetarian candidates only.
+3. When foodType is "veg", candidateIds and every reasonById value must not mention, compare with, or refer to meat, poultry, seafood, or related dish names, including statements that say those foods are absent.
+4. Vegetarian reasons must discuss only the selected vegetarian candidate's plant ingredients, nutrition, and suitability for the goal.
+Return JSON only:
+{"candidateIds":["candidate-id"],"reasonById":{"candidate-id":"short Traditional Chinese reason"}}.
 If nutrientTargets is non-empty, it is the user's remaining nutrient budget for the rest of today (calories/protein/
 fat/carbs already adjusted for what they've logged so far) — prefer candidates whose calories fit within
 nutrientTargets.caloriesKcal rather than picking the largest/richest option regardless of it, and mention the fit in

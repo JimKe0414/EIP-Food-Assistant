@@ -1,4 +1,5 @@
 import type { MealAnalysisResult, TranscriptionResult } from '~/shared/domain/ai'
+import type { FoodType } from '~/types/diet'
 
 interface JobResponse<T> {
   state: string
@@ -8,6 +9,18 @@ interface JobResponse<T> {
 }
 
 export type JobProgress = { queueDepth?: number }
+
+interface LunchCandidateResponse {
+  id: string
+  name: string
+  caloriesKcal: number
+  proteinG: number | null
+}
+
+interface LunchRecommendationOutput {
+  candidateIds: string[]
+  reasonById: Record<string, string>
+}
 
 export function useApi() {
   let csrfToken: string | undefined
@@ -54,7 +67,23 @@ export function useApi() {
     return waitForJob<TranscriptionResult>(queued.statusUrl, 240_000, onProgress)
   }
 
-  return { post, postForm, waitForJob, analyzeText, analyzeImage, transcribeAudio }
+  async function recommendLunch(goal: string, foodType: FoodType, useMockData = false) {
+    const queued = await post<{
+      statusUrl: string
+      candidates: LunchCandidateResponse[]
+      dataMode: 'live' | 'mock'
+      warning?: string
+    }>('/api/recommend-lunch', {
+      goal,
+      foodType,
+      useMockData,
+      serviceDate: new Date().toISOString().slice(0, 10)
+    })
+    const output = await waitForJob<LunchRecommendationOutput>(queued.statusUrl, 30_000)
+    return { ...queued, output }
+  }
+
+  return { post, postForm, waitForJob, analyzeText, analyzeImage, transcribeAudio, recommendLunch }
 }
 
 export async function fileToBase64(file: Blob) {

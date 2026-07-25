@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, sql } from 'drizzle-orm'
 import { customFoods, eipMenuItems, meals, nutrientVersions, nutrients, profileSnapshots } from '~/db/schema'
 import { calculateBodyMetrics } from '~/shared/domain/body-metrics'
+import { getMockLunchCandidates } from '~/server/services/lunch/mock-candidates'
 import { getTfdaFreshness } from '~/shared/domain/tfda'
 
 export default defineEventHandler(async (event) => {
@@ -11,10 +12,20 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 429, statusMessage: 'Too Many Requests' })
   }
 
-  const body = await readBody<{ goal?: string, serviceDate?: string }>(event)
+  const body = await readBody<{ goal?: string, foodType?: string, serviceDate?: string, useMockData?: boolean }>(event)
   const serviceDate = body.serviceDate || new Date().toISOString().slice(0, 10)
   const goal = String(body.goal || '均衡飲食').slice(0, 80)
-  const scoped = await withUserScope(user.id, async database => {
+  const foodType = body.foodType === 'veg' ? 'veg' : 'meat'
+  const useMockData = body.useMockData === true
+  const scoped = useMockData ? {
+    freshness: getTfdaFreshness(new Date()),
+    recent: foodType === 'veg'
+      ? [{ name: '香煎豆腐餐盒' }, { name: '鷹嘴豆沙拉' }]
+      : [{ name: '香煎雞腿便當' }, { name: '雞肉沙拉' }],
+    snapshot: null,
+    eatenToday: null,
+    candidates: getMockLunchCandidates(foodType)
+  } : await withUserScope(user.id, async database => {
     const eip = await database.select().from(eipMenuItems).where(and(eq(eipMenuItems.userId, user.id), eq(eipMenuItems.serviceDate, serviceDate))).limit(60)
     const custom = eip.length ? [] : await database.select().from(customFoods).where(eq(customFoods.userId, user.id)).limit(60)
     const [version] = await database.select().from(nutrientVersions).orderBy(desc(nutrientVersions.syncedAt)).limit(1)
@@ -77,7 +88,14 @@ export default defineEventHandler(async (event) => {
   const jobId = await enqueueAiJob({
     type: 'recommendLunch',
     userId: user.id,
-    context: { goal, candidateIds: candidates.map(candidate => candidate.id), recentMealNames: recent.map(item => item.name), nutrientTargets }
+    context: {
+      goal,
+      foodType,
+      candidateIds: candidates.map(candidate => candidate.id),
+      candidates,
+      recentMealNames: recent.map(item => item.name),
+      nutrientTargets
+    }
   })
 
   setResponseStatus(event, 202)
@@ -86,7 +104,10 @@ export default defineEventHandler(async (event) => {
     statusUrl: `/api/jobs/${jobId}`,
     candidates,
     nutrientFreshness: freshness,
-    warning: freshness.status === 'stale' ? `營養資料可能較舊（${freshness.ageDays} 天前更新）` : undefined,
+    dataMode: useMockData ? 'mock' : 'live',
+    warning: useMockData
+      ? 'FocusIT API 已使用固定假菜單完成測試'
+      : freshness.status === 'stale' ? `營養資料可能較舊（${freshness.ageDays} 天前更新）` : undefined,
     rateLimitRemaining: rate.remaining
   }
 })

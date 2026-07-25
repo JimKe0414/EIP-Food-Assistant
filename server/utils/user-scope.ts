@@ -32,7 +32,7 @@ export async function getUserSession(event: H3Event) {
     cookie: {
       httpOnly: true,
       secure: useSecureCookies(),
-      sameSite: 'strict',
+      sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60 * 8
     }
