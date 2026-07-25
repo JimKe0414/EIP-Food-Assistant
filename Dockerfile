@@ -52,6 +52,10 @@ FROM node:22-bookworm-slim AS worker-runtime
 
 ENV NODE_ENV=production
 WORKDIR /app
+# ffmpeg transcodes browser mic recordings (WebM/Opus) to WAV for the whisper-cpp AI provider,
+# whose whisper.cpp backend only decodes raw WAV/PCM.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
 COPY --from=build --chown=node:node /app/dist/worker ./dist/worker
 COPY --from=build --chown=node:node /app/scripts/check-gpu.mjs ./scripts/check-gpu.mjs
 USER node

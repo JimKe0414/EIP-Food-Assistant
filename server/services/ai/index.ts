@@ -5,8 +5,9 @@ import { LocalWhisperProvider } from './local-whisper'
 import { OllamaAiProvider } from './ollama'
 import { OpenAiCompatibleProvider } from './openai-compatible'
 import { StubAiProvider } from './stub'
+import { WhisperCppProvider } from './whisper-cpp'
 
-export type ProviderName = 'stub' | 'ollama' | 'local-whisper' | 'openai-compatible' | 'google-genai'
+export type ProviderName = 'stub' | 'ollama' | 'local-whisper' | 'whisper-cpp' | 'openai-compatible' | 'google-genai'
 export type ProviderPurpose = 'text' | 'vision' | 'audio'
 
 export interface AiConfiguration {
@@ -52,6 +53,7 @@ export function createAiProvider(config: AiConfiguration, purpose: ProviderPurpo
     case 'stub': return new StubAiProvider()
     case 'ollama': return new OllamaAiProvider({ baseUrl: config.ollamaBaseUrl, textModel: config.textModel, visionModel: config.visionModel })
     case 'local-whisper': return new LocalWhisperProvider(config.whisperBaseUrl)
+    case 'whisper-cpp': return new WhisperCppProvider(config.whisperBaseUrl)
     case 'openai-compatible': return new OpenAiCompatibleProvider({
       baseUrl: config.openAiBaseUrl,
       apiKey: config.openAiApiKey,
