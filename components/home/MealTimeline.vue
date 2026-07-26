@@ -28,13 +28,13 @@ const missingMealTypes = computed(() => (['breakfast', 'lunch', 'dinner'] as con
       <time :datetime="meal.createdAt">{{ formatTime(meal.createdAt) }}</time>
       <div>
         <b>{{ meal.name }}</b>
-        <span>{{ mealTypeLabels[meal.mealType] }}・{{ sourceLabels[meal.source] }}<template v-if="meal.confidence !== null">・可信度 {{ Math.round(meal.confidence * 100) }}%</template></span>
+        <span>{{ mealTypeLabels[meal.mealType] }}・{{ sourceLabels[meal.source] }}<template v-if="meal.confidence !== null">・辨識參考值 {{ Math.round(meal.confidence * 100) }}%</template></span>
       </div>
       <strong>{{ Math.round(meal.caloriesKcal) }} kcal</strong>
     </article>
     <NuxtLink v-for="mealType in missingMealTypes" :key="mealType" :to="`/record?meal=${mealType}`">
       <span class="meal-timeline__empty">＋</span>
-      <div><b>{{ mealTypeLabels[mealType] }}尚未記錄</b><span>新增後會立即寫入 DB 並更新本頁</span></div>
+      <div><b>{{ mealTypeLabels[mealType] }}尚未記錄</b><span>新增後會立即更新本頁</span></div>
       <strong>—</strong>
     </NuxtLink>
   </div>

@@ -34,10 +34,10 @@ function rejectInstall() {
 </script>
 
 <template>
-  <div class="pwa-status" aria-live="polite">
-    <div v-if="!online" class="pwa-banner offline"><Icon name="solar:cloud-cross-linear" />目前離線，顯示最後同步資料</div>
-    <div v-if="$pwa?.needRefresh" class="pwa-banner update">有新版本可用<button type="button" @click="$pwa?.updateServiceWorker(true)">立即更新</button></div>
-    <div v-if="shouldInstall" class="pwa-banner install">將一食之選加入主畫面<button type="button" @click="install">安裝</button><button type="button" aria-label="30 天內不再提示" @click="rejectInstall">稍後</button></div>
-    <div v-else-if="shouldShowIosGuide" class="pwa-banner install">點選分享，再選「加入主畫面」<button type="button" aria-label="30 天內不再提示" @click="rejectInstall">稍後</button></div>
-  </div>
+  <TransitionGroup name="banner" tag="div" class="pwa-status" aria-live="polite">
+    <div v-if="!online" key="offline" class="pwa-banner offline"><Icon name="solar:cloud-cross-linear" />目前沒有網路，先顯示上次載入的內容</div>
+    <div v-if="$pwa?.needRefresh" key="update" class="pwa-banner update">有新版本可用<button type="button" @click="$pwa?.updateServiceWorker(true)">立即更新</button></div>
+    <div v-if="shouldInstall" key="install" class="pwa-banner install">將一食之選加入主畫面<button type="button" @click="install">安裝</button><button type="button" aria-label="30 天內不再提示" @click="rejectInstall">稍後</button></div>
+    <div v-else-if="shouldShowIosGuide" key="ios-guide" class="pwa-banner install">點選分享，再選「加入主畫面」<button type="button" aria-label="30 天內不再提示" @click="rejectInstall">稍後</button></div>
+  </TransitionGroup>
 </template>

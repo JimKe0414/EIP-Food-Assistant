@@ -13,7 +13,7 @@ const modes: { value: RecordMode, label: string, icon: string }[] = [
 
 async function saved(payload?: MealInput) {
   if (!payload) {
-    notify('候選已確認；請使用文字模式串接正式記錄，照片／語音需保持連線')
+    notify('這項餐點已確認。若要儲存紀錄，請改用文字輸入；照片和語音功能需要保持網路連線。')
     return
   }
   try {
@@ -39,14 +39,16 @@ useSeoMeta({ title: '餐食記錄｜一食之選' })
 
 <template>
   <div class="record-page">
-    <PageHeading title="記錄餐食" description="所有輸入先產生候選，確認後才會寫入正式紀錄" />
+    <PageHeading title="記錄餐食" description="輸入或辨識餐點後，請確認內容再儲存。" />
     <div class="mode-tabs" role="tablist" aria-label="選擇餐食輸入方式">
       <button v-for="mode in modes" :key="mode.value" type="button" role="tab" :aria-selected="recordMode === mode.value" :class="{ active: recordMode === mode.value }" @click="recordMode = mode.value">
         <Icon :name="mode.icon" />{{ mode.label }}
       </button>
     </div>
-    <PhotoRecordPanel v-if="recordMode === 'photo'" @saved="saved" />
-    <VoiceRecordPanel v-else-if="recordMode === 'voice'" @saved="saved" />
-    <TextRecordPanel v-else @saved="saved" />
+    <Transition name="panel" mode="out-in">
+      <PhotoRecordPanel v-if="recordMode === 'photo'" key="photo" @saved="saved" />
+      <VoiceRecordPanel v-else-if="recordMode === 'voice'" key="voice" @saved="saved" />
+      <TextRecordPanel v-else key="text" @saved="saved" />
+    </Transition>
   </div>
 </template>

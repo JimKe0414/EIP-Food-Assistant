@@ -29,7 +29,9 @@ watchEffect(() => {
       </main>
       <BottomNavigation />
     </div>
-    <RightInsight v-if="showRightInsight" />
+    <Transition name="insight">
+      <RightInsight v-if="showRightInsight" />
+    </Transition>
     <QuickRecordDialog />
     <AppToast />
   </div>

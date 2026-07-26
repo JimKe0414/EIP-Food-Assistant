@@ -5,6 +5,7 @@ import {
   integer,
   jsonb,
   numeric,
+  primaryKey,
   pgEnum,
   pgTable,
   text,
@@ -83,20 +84,45 @@ export const customFoods = pgTable('custom_foods', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, table => [index('custom_foods_user_idx').on(table.userId)])
 
+export const eipRestaurants = pgTable('eip_restaurants', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 120 }).notNull(),
+  normalizedName: varchar('normalized_name', { length: 120 }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+}, table => [
+  uniqueIndex('eip_restaurants_normalized_name_uidx').on(table.normalizedName),
+  index('eip_restaurants_name_idx').on(table.name)
+])
+
 export const eipMenuItems = pgTable('eip_menu_items', {
   id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  serviceDate: date('service_date', { mode: 'string' }).notNull(),
+  restaurantId: uuid('restaurant_id').notNull().references(() => eipRestaurants.id, { onDelete: 'cascade' }),
   foodType: foodTypeEnum('food_type').notNull().default('unknown'),
-  vendorName: varchar('vendor_name', { length: 120 }),
   name: varchar('name', { length: 160 }).notNull(),
+  normalizedName: varchar('normalized_name', { length: 160 }).notNull(),
   caloriesKcal: numeric('calories_kcal', { precision: 8, scale: 2 }).notNull(),
   proteinG: numeric('protein_g', { precision: 7, scale: 2 }),
   fatG: numeric('fat_g', { precision: 7, scale: 2 }),
   carbsG: numeric('carbs_g', { precision: 7, scale: 2 }),
+  fiberG: numeric('fiber_g', { precision: 7, scale: 2 }),
   sodiumMg: numeric('sodium_mg', { precision: 9, scale: 2 }),
+  nutritionEstimated: boolean('nutrition_estimated').notNull().default(false),
   importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow()
-}, table => [index('eip_menu_user_date_idx').on(table.userId, table.serviceDate)])
+}, table => [
+  uniqueIndex('eip_menu_restaurant_name_uidx').on(table.restaurantId, table.normalizedName),
+  index('eip_menu_restaurant_food_type_idx').on(table.restaurantId, table.foodType)
+])
+
+export const userDailyRestaurantSelections = pgTable('user_daily_restaurant_selections', {
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  serviceDate: date('service_date', { mode: 'string' }).notNull(),
+  restaurantId: uuid('restaurant_id').notNull().references(() => eipRestaurants.id, { onDelete: 'cascade' }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+}, table => [
+  primaryKey({ columns: [table.userId, table.serviceDate], name: 'user_daily_restaurant_selections_pk' }),
+  index('user_daily_restaurant_selections_restaurant_idx').on(table.restaurantId)
+])
 
 export const eipOrders = pgTable('eip_orders', {
   id: uuid('id').primaryKey().defaultRandom(),

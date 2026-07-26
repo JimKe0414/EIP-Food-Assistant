@@ -20,7 +20,7 @@ const remainingLabel = computed(() => {
 })
 const tip = computed(() => {
   if (!summary.value?.today.mealCount) return '今天尚未有餐食紀錄，新增後會在這裡顯示即時進度。'
-  if (!summary.value.targets) return '請先建立個人資料快照，才能計算每日參考目標。'
+  if (!summary.value.targets) return '請先完成個人資料，才能計算每日參考目標。'
   const proteinRemaining = summary.value.targets.proteinG - summary.value.today.proteinG
   return proteinRemaining > 0
     ? `蛋白質距參考目標尚差約 ${Math.round(proteinRemaining)} g。`
@@ -30,7 +30,7 @@ const tip = computed(() => {
 
 <template>
   <aside class="right-insight">
-    <div class="right-insight__date"><span>今日</span><b>{{ dateLabel }}</b><small>Asia/Taipei</small></div>
+    <div class="right-insight__date"><span>今日</span><b>{{ dateLabel }}</b><small>台灣時間</small></div>
     <section>
       <div
         class="radial-progress"
@@ -42,7 +42,7 @@ const tip = computed(() => {
       <p><strong>{{ remainingLabel }}</strong></p>
     </section>
     <section class="right-insight__tip">
-      <span>DB 紀錄提醒</span>
+      <span>今日飲食提醒</span>
       <p>{{ tip }}</p>
     </section>
   </aside>

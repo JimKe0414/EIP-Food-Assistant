@@ -33,6 +33,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@iconify-json/logos": "^1.2.11",
+    "@iconify-json/solar": "^1.2.5",
+    "@iconify-json/svg-spinners": "^1.2.4",
     "@playwright/test": "^1.61.1",
     "@types/node": "^26.1.1",
     "drizzle-kit": "^0.31.10",

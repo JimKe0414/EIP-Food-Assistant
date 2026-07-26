@@ -99,7 +99,7 @@ onBeforeUnmount(() => stream?.getTracks().forEach(track => track.stop()))
       <article v-for="candidate in candidates" :key="candidate.name" class="candidate-result">
         <div class="detected-food">
           <Icon name="solar:check-circle-linear" />
-          <div><input v-model="candidate.name" aria-label="候選餐點名稱"><span>信心值 {{ Math.round(candidate.confidence * 100) }}%</span></div>
+          <div><input v-model="candidate.name" aria-label="餐點名稱"><span>辨識參考值 {{ Math.round(candidate.confidence * 100) }}%</span></div>
           <button type="button" class="button button--primary button--small" @click="confirm(candidate)">確認</button>
         </div>
         <div class="portion-select" role="radiogroup" :aria-label="`${candidate.name} 份量調整`">

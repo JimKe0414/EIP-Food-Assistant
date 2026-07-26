@@ -1,4 +1,8 @@
 import { z } from 'zod'
+import type {
+  EipNutritionEstimateInputItem,
+  EipNutritionEstimateResult
+} from './eip-catalog'
 
 export const nutrientSummarySchema = z.object({
   caloriesKcal: z.number().nonnegative(),
@@ -43,6 +47,8 @@ export const lunchCandidateContextSchema = z.object({
   id: z.string().trim().min(1).max(100),
   source: z.string().trim().min(1).max(30),
   name: z.string().trim().min(1).max(160),
+  restaurantId: z.string().uuid().nullable().optional(),
+  restaurantName: z.string().trim().min(1).max(120).nullable().optional(),
   caloriesKcal: z.number().nonnegative(),
   proteinG: z.number().nonnegative().nullable(),
   fatG: z.number().nonnegative().nullable(),
@@ -108,6 +114,7 @@ export interface AiProvider {
   transcribeMeal(audio: Uint8Array, mimeType: string): Promise<TranscriptionResult>
   recommendLunch(context: LunchContext): Promise<LunchRecommendation>
   estimatePortionGrams(query: PortionEstimateQuery): Promise<PortionEstimate>
+  estimateEipMenuNutrition(items: EipNutritionEstimateInputItem[]): Promise<EipNutritionEstimateResult>
 }
 
 export class AiProviderError extends Error {

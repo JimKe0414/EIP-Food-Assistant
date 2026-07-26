@@ -33,7 +33,7 @@ async function saveProfile(value: Profile) {
     await post('/api/profile', value)
     profile.value = value
     editorOpen.value = false
-    notify('個人資料與身體指標快照已儲存')
+    notify('個人資料與身體指標已儲存')
     await refreshNuxtData(['profile-state', 'meal-summary'])
   } catch {
     notify('儲存失敗，請先登入或稍後再試')
@@ -62,13 +62,13 @@ useSeoMeta({ title: '我的｜一食之選' })
 <template>
   <div class="profile-page">
     <PageHeading title="我的" description="管理個人資料、健康目標與提醒設定" />
-    <section class="profile-hero"><div class="profile-photo">我</div><div><h2>已登入使用者</h2><p>登入識別以 HMAC 匿名保存</p><div><span>健康目標：{{ goal }}</span><span>{{ activityLabel }}</span></div></div></section>
+    <section class="profile-hero"><div class="profile-photo">我</div><div><h2>已登入使用者</h2><p>系統以匿名代碼辨識帳號</p><div><span>健康目標：{{ goal }}</span><span>{{ activityLabel }}</span></div></div></section>
 
     <div class="profile-columns">
       <section class="profile-card">
         <header><div><h2>基本資料</h2><p>用於估算每日營養與熱量需求</p></div><button type="button" class="button button--soft button--small" @click="editorOpen = true"><Icon name="solar:pen-linear" /> {{ profile ? '編輯' : '建立' }}</button></header>
         <dl v-if="profile" class="basic-grid"><div v-for="item in basics" :key="item[0]"><dt>{{ item[0] }}</dt><dd>{{ item[1] }}</dd></div></dl>
-        <p v-else class="empty-note">尚未建立個人資料。完成後才會依 DB 中的最新快照計算每日目標。</p>
+        <p v-else class="empty-note">尚未建立個人資料。完成後才會計算每日目標。</p>
       </section>
 
       <section class="profile-card metrics-card">
@@ -87,7 +87,7 @@ useSeoMeta({ title: '我的｜一食之選' })
       </div>
       <div class="setting-block">
         <div class="setting-icon"><Icon name="solar:bell-linear" /></div>
-        <div><h3>用餐提醒偏好</h3><p>目前只將是否啟用保存到 DB；實際排程通知尚未推出，不顯示未實作的固定時間。</p></div>
+        <div><h3>用餐提醒偏好</h3><p>目前只會記住是否開啟用餐提醒。實際通知功能尚未推出，因此不顯示提醒時間。</p></div>
         <label class="switch"><input v-model="selectedReminder" type="checkbox" aria-label="啟用用餐提醒" @change="savePreferences"><span /></label>
       </div>
     </section>

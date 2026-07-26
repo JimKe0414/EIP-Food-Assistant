@@ -26,6 +26,7 @@ export async function getUserSession(event: H3Event) {
     emailDomain?: string
     oauthState?: string
     oauthVerifier?: string
+    returnTo?: string
   }>(event, {
     name: 'food_session',
     password: config.sessionPassword,

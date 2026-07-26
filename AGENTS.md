@@ -78,7 +78,9 @@
 
 - `auth/`：`dev.post`（開發登入）、`google.get` + `google-callback.get`（Google OAuth）、`session.get`、`logout.post`
 - `csrf-token.get`
-- `eip/import.post`、`eip/menu.get`、`eip/menu.post`：員工餐廳 CSV/XLSX 匯入與選單
+- `eip/import.post`：個人 EIP 訂餐紀錄 CSV/XLSX 匯入
+- `eip/menu.get`、`eip/menu.post`、`eip/menu/import.post`：全系統共用餐廳菜單查詢與 upsert 匯入
+- `eip/restaurants.get`、`eip/restaurant-selection.get`、`eip/restaurant-selection.post`：餐廳搜尋與使用者每日餐廳選擇
 - `health.get`、`ready.get`：健康檢查（Docker healthcheck 用）
 - `internal/tfda-sync.post`：只給 worker 用內部 token 呼叫的內部端點
 - `jobs/[id].get`：查詢非同步 AI 任務狀態
@@ -111,7 +113,9 @@
 | `user_preferences` | 健康目標與提醒開關；依使用者保存 |
 | `meals` | 使用者的餐食記錄（來源：manual/photo/voice/eip/custom/tfda），`client_request_id` 防止重複提交 |
 | `custom_foods` | 使用者自訂食物 |
-| `eip_menu_items` | 員工餐廳（EIP）當日菜單匯入資料 |
+| `eip_restaurants` | 全系統共用的 EIP 餐廳目錄，以正規化餐廳名稱去重 |
+| `eip_menu_items` | 全系統共用的 EIP 餐點目錄，以「餐廳＋正規化餐點名稱」唯一並採 upsert 更新 |
+| `user_daily_restaurant_selections` | 使用者每日選擇的餐廳；使用者未選時可跨餐廳推薦 |
 | `eip_orders` | 員工餐廳訂餐記錄匯入資料 |
 | `nutrients` | TFDA 營養資料庫（正式表） |
 | `nutrients_staging` | TFDA 資料同步用的暫存表 |
@@ -122,7 +126,7 @@
 
 ### 重要：Row-Level Security（RLS）
 
-`meals`、`custom_foods`、`profile_snapshots`、`user_preferences`、`eip_menu_items`、`eip_orders`、`meal_import_batches` 都開了 **`ENABLE ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY`**，policy 綁定 Postgres session 變數 `app.current_user_id`。意味著：**就算 API 程式碼寫錯、忘記加 WHERE user_id = ...，資料庫層也會擋掉跨使用者存取**。這是這個專案的核心安全設計，之後你自己建表／改表時要留意是否也要套用同樣的 RLS pattern（可以參考 `db/migrations/0000_initial.sql` 第 90 行左右的 policy 產生邏輯）。
+`meals`、`custom_foods`、`profile_snapshots`、`user_preferences`、`user_daily_restaurant_selections`、`eip_orders`、`meal_import_batches` 都開了 **`ENABLE ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY`**，policy 綁定 Postgres session 變數 `app.current_user_id`。意味著：**就算 API 程式碼寫錯、忘記加 WHERE user_id = ...，資料庫層也會擋掉跨使用者存取**。`eip_restaurants` 與 `eip_menu_items` 是刻意設計成全系統共用的餐廳／餐點目錄，不套使用者 RLS；寫入 API 仍要求登入。這是這個專案的核心安全設計，之後你自己建表／改表時要先判斷資料是個人私有或全系統共用。
 
 ### 建表 / 加欄位的正確流程
 

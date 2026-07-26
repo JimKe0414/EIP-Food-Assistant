@@ -62,15 +62,15 @@ function confirm(candidate: MealCandidate) {
     <label>餐點內容<textarea v-model="content" required rows="6" placeholder="例如：雞胸肉便當，飯半碗，青菜兩份" /></label>
     <label>備註<input placeholder="可補充份量、烹調方式等"></label>
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
-    <button class="button button--primary button--wide" type="submit" :disabled="loading">{{ loading ? '分析中…' : '產生候選並分析' }}</button>
+    <button class="button button--primary button--wide" type="submit" :disabled="loading">{{ loading ? '分析中…' : '分析餐食內容' }}</button>
     <p v-if="queueDepth" class="queue-hint">前面還有 {{ queueDepth }} 個任務在處理，請耐心等候</p>
     <p v-if="!loading && !candidates.length && summary" class="empty-note">{{ summary }}</p>
-    <section v-if="candidates.length" class="candidate-list" aria-label="餐食候選清單">
+    <section v-if="candidates.length" class="candidate-list" aria-label="餐食分析結果">
       <div v-if="candidates.length > 1" class="candidate-total"><span>本次辨識共 {{ candidates.length }} 項食材，總熱量</span><b>{{ Math.round(totalCalories) }} kcal</b></div>
       <article v-for="candidate in candidates" :key="candidate.name" class="candidate-result">
         <div class="detected-food">
           <Icon name="solar:check-circle-linear" />
-          <div><input v-model="candidate.name" aria-label="候選餐點名稱"><span>信心值 {{ Math.round(candidate.confidence * 100) }}%</span></div>
+          <div><input v-model="candidate.name" aria-label="餐點名稱"><span>辨識參考值 {{ Math.round(candidate.confidence * 100) }}%</span></div>
           <button type="button" class="button button--primary button--small" @click="confirm(candidate)">確認</button>
         </div>
         <div class="portion-select" role="radiogroup" :aria-label="`${candidate.name} 份量調整`">

@@ -16,6 +16,7 @@ export interface Metric {
 export interface MenuItem {
   id: string
   source: 'eip' | 'custom' | 'tfda'
+  restaurantName?: string | null
   name: string
   kcal: string
   reason: string

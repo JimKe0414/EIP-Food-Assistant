@@ -23,7 +23,7 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-https://localhost:3000/api/auth/google-callback}
-      ALLOW_DEV_AUTH: ${ALLOW_DEV_AUTH:-false}
+      ALLOW_DEV_AUTH: ${ALLOW_DEV_AUTH:-true}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       TFDA_AUTO_DOWNLOAD: ${TFDA_AUTO_DOWNLOAD:-false}
       TFDA_NUTRIENT_XLSX_URL: ${TFDA_NUTRIENT_XLSX_URL:-https://consumer.fda.gov.tw/uc/GetFile.ashx?type=ServerFile&id=4862259227103213368}
@@ -43,7 +43,7 @@ services:
       NUXT_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       NUXT_GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       NUXT_GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-https://localhost:3000/api/auth/google-callback}
-      NUXT_ALLOW_DEV_AUTH: ${ALLOW_DEV_AUTH:-false}
+      NUXT_ALLOW_DEV_AUTH: ${ALLOW_DEV_AUTH:-true}
       NUXT_TFDA_AUTO_DOWNLOAD: ${TFDA_AUTO_DOWNLOAD:-false}
       NUXT_TFDA_NUTRIENT_XLSX_URL: ${TFDA_NUTRIENT_XLSX_URL:-https://consumer.fda.gov.tw/uc/GetFile.ashx?type=ServerFile&id=4862259227103213368}
       NUXT_APP_TIME_ZONE: ${APP_TIME_ZONE:-Asia/Taipei}

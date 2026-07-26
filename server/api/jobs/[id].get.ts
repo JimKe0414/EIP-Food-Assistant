@@ -1,5 +1,6 @@
 import { AI_QUEUE, aiJobSchema } from '~/shared/domain/jobs'
 import { enforceLunchRecommendationPolicy, lunchRecommendationSchema } from '~/shared/domain/ai'
+import { eipMenuImportResultSchema } from '~/shared/domain/eip-catalog'
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
@@ -40,6 +41,10 @@ export default defineEventHandler(async (event) => {
     } else {
       output = { candidateIds: [], reasonById: {} }
     }
+  }
+  if (job.state === 'completed' && data.data.type === 'estimateEipMenuNutrition') {
+    const parsed = eipMenuImportResultSchema.safeParse(output)
+    output = parsed.success ? parsed.data : undefined
   }
 
   // pg-boss stores { message, stack } as the job's output when a handler throws — surface the

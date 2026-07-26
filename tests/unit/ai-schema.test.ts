@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { lunchRecommendationSchema, mealAnalysisResultSchema, transcriptionResultSchema } from '../../shared/domain/ai'
+import { eipNutritionEstimateResultSchema } from '../../shared/domain/eip-catalog'
 import { StubAiProvider } from '../../server/services/ai/stub'
 import { aiConfigurationFromEnv, validateAiConfiguration } from '../../server/services/ai'
 
@@ -9,6 +10,26 @@ describe('AI provider contract', () => {
     expect(mealAnalysisResultSchema.parse(await provider.analyzeMeal({ text: '雞肉便當' })).candidates).toHaveLength(1)
     expect(transcriptionResultSchema.parse(await provider.transcribeMeal()).text).toBeTruthy()
     expect(lunchRecommendationSchema.parse(await provider.recommendLunch({ goal: '均衡', foodType: 'veg', candidateIds: ['eip:1'], candidates: [], recentMealNames: [], nutrientTargets: {} })).candidateIds).toEqual(['eip:1'])
+    const estimated = await provider.estimateEipMenuNutrition([
+      {
+        rowId: 'row-2',
+        restaurantName: '幸福食堂',
+        name: '烤雞便當',
+        foodType: 'meat',
+        missingFields: ['caloriesKcal'],
+        nutrients: { caloriesKcal: null, proteinG: 30, fatG: null, carbsG: null, fiberG: null, sodiumMg: null }
+      },
+      {
+        rowId: 'row-3',
+        restaurantName: '綠意廚房',
+        name: '豆腐蔬菜餐盒',
+        foodType: 'veg',
+        missingFields: ['caloriesKcal'],
+        nutrients: { caloriesKcal: null, proteinG: null, fatG: null, carbsG: null, fiberG: null, sodiumMg: null }
+      }
+    ])
+    expect(eipNutritionEstimateResultSchema.parse(estimated).items).toHaveLength(2)
+    expect(estimated.items[0].nutrients.caloriesKcal).not.toBe(estimated.items[1].nutrients.caloriesKcal)
   })
 
   it('rejects invalid model output and cloud providers in local-only mode', () => {

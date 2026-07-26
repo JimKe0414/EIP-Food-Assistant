@@ -85,7 +85,7 @@ useSeoMeta({ title: '營養趨勢｜一食之選' })
 
       <section class="chart-card weight-chart">
         <header><div><span>體重趨勢</span><h2>尚未推出</h2></div></header>
-        <p class="subnote">目前系統尚未支援每日體重記錄，僅有個人資料頁的身體數值快照。</p>
+        <p class="subnote">目前還不能記錄每天的體重，只會使用「我的」頁面中最近一次填寫的身體數值。</p>
       </section>
     </div>
 

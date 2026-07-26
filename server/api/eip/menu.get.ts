@@ -1,39 +1,59 @@
-import { and, desc, eq, inArray } from 'drizzle-orm'
-import { eipMenuItems } from '~/db/schema'
-import { formatDateInTimeZone } from '~/shared/domain/date'
+import { and, asc, desc, eq, inArray } from 'drizzle-orm'
+import { eipMenuItems, eipRestaurants } from '~/db/schema'
 import { lunchFoodTypeSchema } from '~/shared/domain/ai'
 import { z } from 'zod'
 
 const querySchema = z.object({
-  serviceDate: z.iso.date().optional(),
-  foodType: lunchFoodTypeSchema.default('meat')
+  foodType: lunchFoodTypeSchema.default('meat'),
+  restaurantId: z.preprocess(value => value === '' || value === 'null' ? undefined : value, z.uuid().optional())
 })
 
 export default defineEventHandler(async (event) => {
-  const user = await requireUser(event)
+  await requireUser(event)
   const query = querySchema.parse(getQuery(event))
-  const serviceDate = query.serviceDate ?? formatDateInTimeZone(new Date(), useRuntimeConfig().appTimeZone)
   const foodTypes = query.foodType === 'veg' ? ['veg'] as const : ['meat', 'unknown'] as const
-  const rows = await withUserScope(user.id, database => database.select().from(eipMenuItems).where(and(
-    eq(eipMenuItems.userId, user.id),
-    eq(eipMenuItems.serviceDate, serviceDate),
-    inArray(eipMenuItems.foodType, foodTypes)
-  )).orderBy(desc(eipMenuItems.importedAt)).limit(200))
+  const rows = await useDatabase().select({
+    id: eipMenuItems.id,
+    restaurantId: eipRestaurants.id,
+    restaurantName: eipRestaurants.name,
+    name: eipMenuItems.name,
+    caloriesKcal: eipMenuItems.caloriesKcal,
+    proteinG: eipMenuItems.proteinG,
+    fatG: eipMenuItems.fatG,
+    carbsG: eipMenuItems.carbsG,
+    fiberG: eipMenuItems.fiberG,
+    sodiumMg: eipMenuItems.sodiumMg,
+    nutritionEstimated: eipMenuItems.nutritionEstimated,
+    importedAt: eipMenuItems.importedAt
+  }).from(eipMenuItems)
+    .innerJoin(eipRestaurants, eq(eipRestaurants.id, eipMenuItems.restaurantId))
+    .where(and(
+      inArray(eipMenuItems.foodType, foodTypes),
+      query.restaurantId ? eq(eipMenuItems.restaurantId, query.restaurantId) : undefined
+    ))
+    .orderBy(asc(eipRestaurants.name), asc(eipMenuItems.name), desc(eipMenuItems.importedAt))
+    .limit(300)
 
   return {
-    serviceDate,
     foodType: query.foodType,
-    vendorNames: [...new Set(rows.map(row => row.vendorName).filter((name): name is string => Boolean(name)))],
+    restaurantId: query.restaurantId ?? null,
+    restaurants: [...new Map(rows.map(row => [row.restaurantId, {
+      id: row.restaurantId,
+      name: row.restaurantName
+    }])).values()],
     items: rows.map(row => ({
       id: `eip:${row.id}`,
       source: 'eip' as const,
+      restaurantId: row.restaurantId,
+      restaurantName: row.restaurantName,
       name: row.name,
       caloriesKcal: Number(row.caloriesKcal),
       proteinG: numberOrNull(row.proteinG),
       fatG: numberOrNull(row.fatG),
       carbsG: numberOrNull(row.carbsG),
-      fiberG: null,
+      fiberG: numberOrNull(row.fiberG),
       sodiumMg: numberOrNull(row.sodiumMg),
+      nutritionEstimated: row.nutritionEstimated,
       importedAt: row.importedAt
     }))
   }

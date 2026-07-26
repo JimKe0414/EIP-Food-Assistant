@@ -1,10 +1,57 @@
+const bundledIcons = [
+  'logos:google-icon',
+  'solar:add-circle-linear',
+  'solar:alt-arrow-down-linear',
+  'solar:arrow-right-linear',
+  'solar:bell-linear',
+  'solar:camera-linear',
+  'solar:chart-2-linear',
+  'solar:check-circle-bold',
+  'solar:check-circle-linear',
+  'solar:chef-hat-heart-linear',
+  'solar:chef-hat-linear',
+  'solar:close-circle-linear',
+  'solar:cloud-cross-linear',
+  'solar:home-2-linear',
+  'solar:info-circle-linear',
+  'solar:logout-2-linear',
+  'solar:magnifer-linear',
+  'solar:microphone-2-linear',
+  'solar:pen-linear',
+  'solar:pen-new-square-linear',
+  'solar:refresh-linear',
+  'solar:target-linear',
+  'solar:upload-linear',
+  'solar:user-rounded-linear',
+  'solar:verified-check-linear',
+  'svg-spinners:ring-resize'
+] as const
+
 export default defineNuxtConfig({
   compatibilityDate: '2025-05-15',
   devtools: { enabled: true },
   modules: ['@nuxt/icon', '@vite-pwa/nuxt'],
+  icon: {
+    // Inline SVGs do not need @nuxt/icon's runtime <style> injection, which is
+    // intentionally blocked by the nonce-only CSP after client-side navigation.
+    mode: 'svg',
+    provider: 'none',
+    serverBundle: false,
+    clientBundle: {
+      icons: [...bundledIcons],
+      scan: true,
+      sizeLimitKb: 128
+    }
+  },
   components: [
     { path: '~/components', pathPrefix: false }
   ],
+  nitro: {
+    // Avoid an invalid bare C:\... ESM import for xlsx in Windows dev builds.
+    externals: {
+      inline: ['xlsx']
+    }
+  },
   css: ['~/assets/css/main.css'],
   runtimeConfig: {
     databaseUrl: process.env.DATABASE_URL ?? '',
@@ -83,6 +130,10 @@ export default defineNuxtConfig({
     '/api/**': { headers: { 'cache-control': 'no-store' } }
   },
   app: {
+    pageTransition: {
+      name: 'page',
+      mode: 'out-in'
+    },
     head: {
       htmlAttrs: { lang: 'zh-Hant' },
       title: '一食之選｜EIP 智慧飲食助手',

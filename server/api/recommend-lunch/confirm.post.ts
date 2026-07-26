@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm'
-import { customFoods, eipMenuItems, meals, nutrients } from '~/db/schema'
+import { customFoods, eipMenuItems, eipRestaurants, meals, nutrients } from '~/db/schema'
 import { lunchFoodTypeSchema } from '~/shared/domain/ai'
 import { z } from 'zod'
 
@@ -7,6 +7,7 @@ const confirmationSchema = z.object({
   candidateId: z.string().trim().min(1).max(100),
   serviceDate: z.iso.date(),
   foodType: lunchFoodTypeSchema,
+  restaurantId: z.uuid().nullable().optional(),
   clientRequestId: z.string().trim().min(1).max(100)
 })
 
@@ -15,20 +16,34 @@ export default defineEventHandler(async (event) => {
   const input = await readValidatedBody(event, value => confirmationSchema.parse(value))
   const candidate = await withUserScope(user.id, async database => {
     if (input.candidateId.startsWith('eip:')) {
-      const [row] = await database.select().from(eipMenuItems).where(and(
+      const [row] = await database.select({
+        id: eipMenuItems.id,
+        restaurantId: eipMenuItems.restaurantId,
+        restaurantName: eipRestaurants.name,
+        foodType: eipMenuItems.foodType,
+        name: eipMenuItems.name,
+        caloriesKcal: eipMenuItems.caloriesKcal,
+        proteinG: eipMenuItems.proteinG,
+        fatG: eipMenuItems.fatG,
+        carbsG: eipMenuItems.carbsG,
+        fiberG: eipMenuItems.fiberG,
+        sodiumMg: eipMenuItems.sodiumMg
+      }).from(eipMenuItems)
+        .innerJoin(eipRestaurants, eq(eipRestaurants.id, eipMenuItems.restaurantId))
+        .where(and(
         eq(eipMenuItems.id, input.candidateId.slice(4)),
-        eq(eipMenuItems.userId, user.id),
-        eq(eipMenuItems.serviceDate, input.serviceDate)
+        input.restaurantId ? eq(eipMenuItems.restaurantId, input.restaurantId) : undefined
       )).limit(1)
       if (!row || (input.foodType === 'veg' && row.foodType !== 'veg')) return null
       return {
         source: 'eip' as const,
+        restaurantName: row.restaurantName,
         name: row.name,
         caloriesKcal: row.caloriesKcal,
         proteinG: row.proteinG,
         fatG: row.fatG,
         carbsG: row.carbsG,
-        fiberG: null,
+        fiberG: row.fiberG,
         sodiumMg: row.sodiumMg
       }
     }

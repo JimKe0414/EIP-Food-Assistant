@@ -5,7 +5,7 @@ const route = useRoute()
 const runtimeConfig = useRuntimeConfig()
 const { data: session } = await useFetch<{ authenticated: boolean, emailDomain: string | null }>('/api/auth/session')
 const { post } = useApi()
-const processingLabel = computed(() => runtimeConfig.public.aiProcessingMode === 'cloud' ? '雲端核准處理' : '地端安全處理')
+const processingLabel = computed(() => runtimeConfig.public.aiProcessingMode === 'cloud' ? 'AI 在雲端分析' : 'AI 在內部環境分析')
 
 function isActive(to: string) {
   return to === '/' ? route.path === '/' : route.path.startsWith(to)

@@ -78,3 +78,12 @@ originalDescription (what the user/model first said this food was), portionDescr
 to — trust this as the concrete food identity over your own reading of originalDescription, since it is the entry
 whose per-100g nutrition values will actually be used).
 Return JSON only: {"estimatedGrams": number|null}. Use null only if you genuinely cannot judge a weight.`
+
+export const eipNutritionEstimateSystemPrompt = `Estimate nutrition for prepared restaurant menu items using one normal restaurant serving per item.
+The user message is a JSON array. Each entry contains rowId, restaurantName, name, foodType, known nutrient values,
+and missingFields. Return exactly one entry for every supplied rowId, in the same order, with no extra IDs.
+Never alter or repeat restaurant names or meal names. Estimate all six nutrient fields even when only some are missing;
+the server will preserve every value supplied by the import file and use your values only for missing fields.
+Use plausible numeric values, not null, for caloriesKcal, proteinG, fatG, carbsG, fiberG, and sodiumMg.
+Return JSON only:
+{"items":[{"rowId":"row-id","nutrients":{"caloriesKcal":0,"proteinG":0,"fatG":0,"carbsG":0,"fiberG":0,"sodiumMg":0}}]}`

@@ -1,5 +1,5 @@
 import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm'
-import { customFoods, eipMenuItems, meals, nutrientVersions, nutrients, profileSnapshots } from '~/db/schema'
+import { customFoods, eipMenuItems, eipRestaurants, meals, nutrientVersions, nutrients, profileSnapshots } from '~/db/schema'
 import { calculateBodyMetrics } from '~/shared/domain/body-metrics'
 import { getMockLunchCandidates } from '~/server/services/lunch/mock-candidates'
 import { getTfdaFreshness } from '~/shared/domain/tfda'
@@ -12,6 +12,7 @@ const requestSchema = z.object({
   goal: healthGoalSchema.default('均衡飲食'),
   foodType: lunchFoodTypeSchema.default('meat'),
   serviceDate: z.iso.date().optional(),
+  restaurantId: z.uuid().nullable().optional(),
   useMockData: z.boolean().default(false)
 })
 
@@ -25,7 +26,7 @@ export default defineEventHandler(async (event) => {
 
   const body = await readValidatedBody(event, value => requestSchema.parse(value))
   const serviceDate = body.serviceDate ?? formatDateInTimeZone(new Date(), useRuntimeConfig().appTimeZone)
-  const { goal, foodType, useMockData } = body
+  const { goal, foodType, useMockData, restaurantId } = body
   const scoped = useMockData ? {
     freshness: getTfdaFreshness(new Date()),
     recent: foodType === 'veg'
@@ -36,17 +37,28 @@ export default defineEventHandler(async (event) => {
     candidates: getMockLunchCandidates(foodType)
   } : await withUserScope(user.id, async database => {
     const eipFoodTypes = foodType === 'veg' ? ['veg'] as const : ['meat', 'unknown'] as const
-    const eip = await database.select().from(eipMenuItems).where(and(
-      eq(eipMenuItems.userId, user.id),
-      eq(eipMenuItems.serviceDate, serviceDate),
-      inArray(eipMenuItems.foodType, eipFoodTypes)
-    )).limit(60)
-    const custom = eip.length || foodType === 'veg'
+    const eip = await database.select({
+      id: eipMenuItems.id,
+      restaurantId: eipRestaurants.id,
+      restaurantName: eipRestaurants.name,
+      name: eipMenuItems.name,
+      caloriesKcal: eipMenuItems.caloriesKcal,
+      proteinG: eipMenuItems.proteinG,
+      fatG: eipMenuItems.fatG,
+      carbsG: eipMenuItems.carbsG
+    }).from(eipMenuItems)
+      .innerJoin(eipRestaurants, eq(eipRestaurants.id, eipMenuItems.restaurantId))
+      .where(and(
+        inArray(eipMenuItems.foodType, eipFoodTypes),
+        restaurantId ? eq(eipMenuItems.restaurantId, restaurantId) : undefined
+      ))
+      .limit(60)
+    const custom = restaurantId || eip.length || foodType === 'veg'
       ? []
       : await database.select().from(customFoods).where(eq(customFoods.userId, user.id)).limit(60)
     const [version] = await database.select().from(nutrientVersions).orderBy(desc(nutrientVersions.syncedAt)).limit(1)
     const freshness = getTfdaFreshness(version?.syncedAt ?? null)
-    const publicFoods = foodType === 'veg' || eip.length || custom.length || freshness.status === 'expired'
+    const publicFoods = restaurantId || foodType === 'veg' || eip.length || custom.length || freshness.status === 'expired'
       ? []
       : await database.select().from(nutrients).limit(60)
     const sevenDaysAgo = shiftIsoDate(serviceDate, -6)
@@ -68,7 +80,17 @@ export default defineEventHandler(async (event) => {
       snapshot,
       eatenToday,
       candidates: [
-        ...eip.map(item => ({ id: `eip:${item.id}`, source: 'eip', name: item.name, caloriesKcal: Number(item.caloriesKcal), proteinG: numberOrNull(item.proteinG), fatG: numberOrNull(item.fatG), carbsG: numberOrNull(item.carbsG) })),
+        ...eip.map(item => ({
+          id: `eip:${item.id}`,
+          source: 'eip',
+          restaurantId: item.restaurantId,
+          restaurantName: item.restaurantName,
+          name: item.name,
+          caloriesKcal: Number(item.caloriesKcal),
+          proteinG: numberOrNull(item.proteinG),
+          fatG: numberOrNull(item.fatG),
+          carbsG: numberOrNull(item.carbsG)
+        })),
         ...custom.map(item => ({ id: `custom:${item.id}`, source: 'custom', name: item.name, caloriesKcal: Number(item.caloriesKcal), proteinG: numberOrNull(item.proteinG), fatG: numberOrNull(item.fatG), carbsG: numberOrNull(item.carbsG) })),
         ...publicFoods.map(item => ({ id: `tfda:${item.sampleId}`, source: 'tfda', name: item.name, caloriesKcal: Number(item.caloriesKcal ?? 0), proteinG: numberOrNull(item.proteinG), fatG: numberOrNull(item.fatG), carbsG: numberOrNull(item.carbsG) }))
       ]
@@ -121,6 +143,7 @@ export default defineEventHandler(async (event) => {
     candidates,
     nutrientFreshness: freshness,
     dataMode: useMockData ? 'mock' : 'live',
+    restaurantId: restaurantId ?? null,
     warning: useMockData
       ? 'FocusIT API 已使用固定假菜單完成測試'
       : freshness.status === 'stale' ? `營養資料可能較舊（${freshness.ageDays} 天前更新）` : undefined,

@@ -8,7 +8,18 @@ import {
   type PortionEstimateQuery,
   type TextOrImage
 } from '~/shared/domain/ai'
-import { fetchWithTimeout, mealSystemPrompt, parseJsonContent, portionEstimateSystemPrompt, recommendationSystemPrompt } from './base'
+import {
+  eipNutritionEstimateResultSchema,
+  type EipNutritionEstimateInputItem
+} from '~/shared/domain/eip-catalog'
+import {
+  eipNutritionEstimateSystemPrompt,
+  fetchWithTimeout,
+  mealSystemPrompt,
+  parseJsonContent,
+  portionEstimateSystemPrompt,
+  recommendationSystemPrompt
+} from './base'
 
 interface OpenAiCompatibleOptions {
   baseUrl: string
@@ -59,6 +70,11 @@ export class OpenAiCompatibleProvider implements AiProvider {
   async estimatePortionGrams(query: PortionEstimateQuery) {
     const content = await this.chat(this.options.textModel, portionEstimateSystemPrompt, JSON.stringify(query), 20_000)
     return portionEstimateSchema.parse(parseJsonContent(content))
+  }
+
+  async estimateEipMenuNutrition(items: EipNutritionEstimateInputItem[]) {
+    const content = await this.chat(this.options.textModel, eipNutritionEstimateSystemPrompt, JSON.stringify(items), 90_000)
+    return eipNutritionEstimateResultSchema.parse(parseJsonContent(content))
   }
 
   private chat(model: string, system: string, content: unknown, timeoutMs: number) {
