@@ -5,30 +5,32 @@ import type { MealInput } from '~/shared/domain/meals'
 const { recordMode, notify } = useDietApp()
 const { post } = useApi()
 const { queueMeal } = useOfflineMeals()
+const { mealType, eatenAt, mealDate, mealTime } = useMealRecordDetails()
 const modes: { value: RecordMode, label: string, icon: string }[] = [
   { value: 'photo', label: '拍照', icon: 'solar:camera-linear' },
   { value: 'voice', label: '語音', icon: 'solar:microphone-2-linear' },
   { value: 'text', label: '文字', icon: 'solar:pen-new-square-linear' }
 ]
 
-async function saved(payload?: MealInput) {
-  if (!payload) {
-    notify('這項餐點已確認。若要儲存紀錄，請改用文字輸入；照片和語音功能需要保持網路連線。')
+async function saved(payloads?: MealInput[], onSuccess?: () => void) {
+  if (!payloads?.length) {
+    notify('沒有選擇可儲存的餐點')
     return
   }
   try {
-    const persistedPayload: MealInput = {
+    const persistedPayloads = payloads.map(payload => ({
       ...payload,
       clientRequestId: payload.clientRequestId ?? crypto.randomUUID()
-    }
+    }))
     if (!navigator.onLine) {
-      await queueMeal(persistedPayload)
-      notify('已暫存，連線後自動上傳')
+      for (const payload of persistedPayloads) await queueMeal(payload)
+      notify(`已暫存 ${persistedPayloads.length} 個餐點，連線後自動上傳`)
     } else {
-      await post('/api/meals', persistedPayload)
-      notify(payload.summary ? `餐食已加入今日紀錄：${payload.summary}` : '餐食已加入今日紀錄')
+      await post('/api/meals/batch', { meals: persistedPayloads })
+      notify(`已儲存 ${persistedPayloads.length} 個餐點`)
       await refreshNuxtData('meal-summary')
     }
+    onSuccess?.()
   } catch {
     notify('儲存失敗，請先登入或稍後再試')
   }
@@ -45,10 +47,11 @@ useSeoMeta({ title: '餐食記錄｜一食之選' })
         <Icon :name="mode.icon" />{{ mode.label }}
       </button>
     </div>
+    <MealRecordDetails v-model:meal-type="mealType" v-model:eaten-at="eatenAt" />
     <Transition name="panel" mode="out-in">
-      <PhotoRecordPanel v-if="recordMode === 'photo'" key="photo" @saved="saved" />
-      <VoiceRecordPanel v-else-if="recordMode === 'voice'" key="voice" @saved="saved" />
-      <TextRecordPanel v-else key="text" @saved="saved" />
+      <PhotoRecordPanel v-if="recordMode === 'photo'" key="photo" :meal-type="mealType" :meal-date="mealDate" :meal-time="mealTime" @saved="saved" />
+      <VoiceRecordPanel v-else-if="recordMode === 'voice'" key="voice" :meal-type="mealType" :meal-date="mealDate" :meal-time="mealTime" @saved="saved" />
+      <TextRecordPanel v-else key="text" :meal-type="mealType" :meal-date="mealDate" :meal-time="mealTime" @saved="saved" />
     </Transition>
   </div>
 </template>

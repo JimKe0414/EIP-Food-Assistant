@@ -280,7 +280,7 @@ useSeoMeta({ title: '午餐推薦｜一食之選' })
         <button type="button" class="button button--secondary button--small" :disabled="importing" @click="importInput?.click()"><Icon :name="importing ? 'svg-spinners:ring-resize' : 'solar:upload-linear'" />{{ importButtonLabel }}</button>
         <input ref="importInput" class="visually-hidden" type="file" accept=".csv,.xlsx,.xls" @change="importEipMenu(($event.target as HTMLInputElement).files?.[0])">
         <button type="button" class="button button--primary button--small" :disabled="syncing" @click="syncEip">
-          <Icon :name="syncing ? 'svg-spinners:ring-resize' : 'solar:refresh-linear'" />{{ syncing ? '推薦中' : selectedRestaurant ? '推薦此餐廳餐點' : '跨餐廳推薦' }}
+          <Icon :name="syncing ? 'svg-spinners:ring-resize' : 'solar:refresh-linear'" />{{ syncing ? '推薦中' : selectedRestaurant ? '推薦此餐廳餐點' : '推薦餐點' }}
         </button>
       </div>
     </PageHeading>
@@ -340,7 +340,7 @@ useSeoMeta({ title: '午餐推薦｜一食之選' })
 
     <section class="vendor-card">
       <div class="vendor-card__head"><div><span>餐廳菜單</span><h2>{{ selectedRestaurant?.name ?? '全部餐廳' }}</h2><p>再次匯入同一家餐廳的同名餐點時，會更新原本內容，不會多出重複餐點。</p></div><strong>{{ foodType === 'veg' ? '素食' : '葷食／未分類' }}</strong></div>
-      <dl><div><dt>今日選擇</dt><dd>{{ selectedRestaurant?.name ?? '跨餐廳建議' }}</dd></div><div><dt>餐點</dt><dd>有 {{ menuData?.items.length ?? 0 }} 個</dd></div><div><dt>最後更新</dt><dd>{{ lastImportedAt }}</dd></div></dl>
+      <dl><div><dt>今日選擇</dt><dd>{{ selectedRestaurant?.name ?? '餐點建議' }}</dd></div><div><dt>餐點</dt><dd>有 {{ menuData?.items.length ?? 0 }} 個</dd></div><div><dt>最後更新</dt><dd>{{ lastImportedAt }}</dd></div></dl>
     </section>
 
     <SectionHeading title="本日菜單" :description="menuDescription" />

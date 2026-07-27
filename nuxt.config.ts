@@ -70,7 +70,8 @@ export default defineNuxtConfig({
     public: {
       authMode: process.env.AUTH_MODE ?? 'dev',
       aiProcessingMode: process.env.AI_EGRESS_MODE === 'cloud-approved' ? 'cloud' : 'local',
-      appTimeZone: process.env.APP_TIME_ZONE ?? 'Asia/Taipei'
+      appTimeZone: process.env.APP_TIME_ZONE ?? 'Asia/Taipei',
+      e2eBypassAuth: process.env.E2E_BYPASS_AUTH === 'true'
     }
   },
   pwa: {

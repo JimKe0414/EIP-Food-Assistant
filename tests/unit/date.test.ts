@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { formatDateInTimeZone, isoDateRangeEndingOn, shiftIsoDate } from '../../shared/domain/date'
+import {
+  formatDateInTimeZone,
+  formatDateTimeLocalInTimeZone,
+  formatTimeInTimeZone,
+  isoDateRangeEndingOn,
+  shiftIsoDate
+} from '../../shared/domain/date'
 
 describe('application dates', () => {
   it('uses the configured timezone instead of truncating UTC', () => {
@@ -16,5 +22,11 @@ describe('application dates', () => {
       '2026-03-02',
       '2026-03-03'
     ])
+  })
+
+  it('formats the actual meal time in the application timezone', () => {
+    const instant = new Date('2026-07-25T10:00:45.000Z')
+    expect(formatTimeInTimeZone(instant, 'Asia/Taipei')).toBe('18:00:45')
+    expect(formatDateTimeLocalInTimeZone(instant, 'Asia/Taipei')).toBe('2026-07-25T18:00')
   })
 })

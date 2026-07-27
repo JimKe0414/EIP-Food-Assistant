@@ -40,7 +40,7 @@ export async function getUserSession(event: H3Event) {
   })
 }
 
-type DatabaseTransaction = Parameters<Parameters<ReturnType<typeof useDatabase>['transaction']>[0]>[0]
+export type DatabaseTransaction = Parameters<Parameters<ReturnType<typeof useDatabase>['transaction']>[0]>[0]
 
 export async function withUserScope<T>(userId: string, callback: (database: DatabaseTransaction) => Promise<T>): Promise<T> {
   return useDatabase().transaction(async transaction => {

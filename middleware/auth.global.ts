@@ -1,5 +1,6 @@
 export default defineNuxtRouteMiddleware(async (to) => {
   if (to.path === '/login') return
+  if (import.meta.dev && useRuntimeConfig().public.e2eBypassAuth) return
 
   try {
     const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined

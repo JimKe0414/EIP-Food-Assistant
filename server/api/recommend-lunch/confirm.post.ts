@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm'
 import { customFoods, eipMenuItems, eipRestaurants, meals, nutrients } from '~/db/schema'
 import { lunchFoodTypeSchema } from '~/shared/domain/ai'
+import { formatTimeInTimeZone } from '~/shared/domain/date'
 import { z } from 'zod'
 
 const confirmationSchema = z.object({
@@ -14,6 +15,7 @@ const confirmationSchema = z.object({
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
   const input = await readValidatedBody(event, value => confirmationSchema.parse(value))
+  const timeZone = useRuntimeConfig().appTimeZone
   const candidate = await withUserScope(user.id, async database => {
     if (input.candidateId.startsWith('eip:')) {
       const [row] = await database.select({
@@ -88,6 +90,7 @@ export default defineEventHandler(async (event) => {
       userId: user.id,
       clientRequestId: input.clientRequestId,
       mealDate: input.serviceDate,
+      mealTime: formatTimeInTimeZone(new Date(), timeZone),
       mealType: 'lunch',
       source: candidate.source,
       name: candidate.name,

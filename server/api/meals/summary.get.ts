@@ -2,6 +2,7 @@ import { and, desc, eq, gte, lte, sql } from 'drizzle-orm'
 import { meals, profileSnapshots } from '~/db/schema'
 import { calculateBodyMetrics } from '~/shared/domain/body-metrics'
 import { formatDateInTimeZone, isoDateRangeEndingOn } from '~/shared/domain/date'
+import { compareMealsByTypeThenRecordedAt } from '~/shared/domain/meals'
 
 interface DailyTotals {
   date: string
@@ -43,7 +44,7 @@ export default defineEventHandler(async (event) => {
     const todayMeals = await database.select().from(meals)
       .where(and(eq(meals.userId, user.id), eq(meals.mealDate, today)))
       .orderBy(desc(meals.createdAt))
-      .limit(20)
+      .limit(100)
 
     const [total] = await database.select({
       mealCount: sql<string>`count(*)`
@@ -87,9 +88,10 @@ export default defineEventHandler(async (event) => {
     daily,
     targets,
     totalMealCount,
-    todayMeals: todayMeals.map(meal => ({
+    todayMeals: todayMeals.sort(compareMealsByTypeThenRecordedAt).map(meal => ({
       id: meal.id,
       mealDate: meal.mealDate,
+      mealTime: meal.mealTime,
       mealType: meal.mealType,
       source: meal.source,
       name: meal.name,

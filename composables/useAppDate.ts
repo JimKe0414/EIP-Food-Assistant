@@ -1,4 +1,4 @@
-import { formatDateInTimeZone } from '~/shared/domain/date'
+import { formatDateInTimeZone, formatDateTimeLocalInTimeZone } from '~/shared/domain/date'
 
 export function useAppDate() {
   const config = useRuntimeConfig()
@@ -6,6 +6,10 @@ export function useAppDate() {
 
   function todayDate() {
     return formatDateInTimeZone(new Date(), timeZone)
+  }
+
+  function nowDateTimeLocal() {
+    return formatDateTimeLocalInTimeZone(new Date(), timeZone)
   }
 
   function formatTime(value: string | Date) {
@@ -29,5 +33,5 @@ export function useAppDate() {
     }).format(date)
   }
 
-  return { timeZone, todayDate, formatTime, formatCalendarDate }
+  return { timeZone, todayDate, nowDateTimeLocal, formatTime, formatCalendarDate }
 }

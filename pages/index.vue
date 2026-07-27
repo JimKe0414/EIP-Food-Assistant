@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import type { Metric } from '~/types/diet'
 import type { DashboardSummary } from '~/types/dashboard'
+import type { MealUpdateInput } from '~/shared/domain/meals'
 
-const { openQuickRecord } = useDietApp()
+const { openQuickRecord, notify } = useDietApp()
+const { post } = useApi()
 const { todayDate, formatCalendarDate, formatTime } = useAppDate()
-const { data: summary } = await useFetch<DashboardSummary>('/api/meals/summary', { key: 'meal-summary' })
+const { data: summary, refresh: refreshSummary } = await useFetch<DashboardSummary>('/api/meals/summary', { key: 'meal-summary' })
+const editingMeal = ref<DashboardSummary['todayMeals'][number] | null>(null)
+const deletingMeal = ref<DashboardSummary['todayMeals'][number] | null>(null)
+const savingEdit = ref(false)
+const deleting = ref(false)
 
 const today = todayDate()
 const todayLabel = formatCalendarDate(today)
@@ -57,8 +63,44 @@ const reminderDescription = computed(() => {
     : '今日蛋白質已達參考目標；數值依今天已記錄的餐食加總。'
 })
 
-const latestMeal = computed(() => summary.value?.todayMeals[0] ?? null)
+const latestMeal = computed(() => {
+  const meals = summary.value?.todayMeals ?? []
+  return meals.reduce<(typeof meals)[number] | null>((latest, meal) => {
+    if (!latest) return meal
+    return new Date(meal.createdAt).getTime() > new Date(latest.createdAt).getTime() ? meal : latest
+  }, null)
+})
 const mealCountDescription = computed(() => `今天已記錄 ${summary.value?.today.mealCount ?? 0} 餐`)
+
+async function saveMeal(input: MealUpdateInput) {
+  if (!editingMeal.value || savingEdit.value) return
+  savingEdit.value = true
+  try {
+    await post(`/api/meals/${editingMeal.value.id}/update`, { ...input })
+    await refreshSummary()
+    editingMeal.value = null
+    notify('餐食紀錄已更新')
+  } catch {
+    notify('修改失敗，請稍後再試')
+  } finally {
+    savingEdit.value = false
+  }
+}
+
+async function deleteMeal() {
+  if (!deletingMeal.value || deleting.value) return
+  deleting.value = true
+  try {
+    await post(`/api/meals/${deletingMeal.value.id}/delete`, {})
+    await refreshSummary()
+    deletingMeal.value = null
+    notify('餐食紀錄已刪除')
+  } catch {
+    notify('刪除失敗，請稍後再試')
+  } finally {
+    deleting.value = false
+  }
+}
 
 useSeoMeta({ title: '首頁｜一食之選' })
 </script>
@@ -93,12 +135,30 @@ useSeoMeta({ title: '首頁｜一食之選' })
     <SectionHeading title="最新一筆紀錄" description="依記錄時間顯示" to="/record" action-label="新增" />
     <article v-if="latestMeal" class="featured-food">
       <div class="food-illustration" aria-hidden="true">🍽️</div>
-      <div><h2>{{ latestMeal.name }}</h2><p>{{ latestMeal.summary || '已加入餐食紀錄' }}<br>{{ Math.round(latestMeal.caloriesKcal) }} kcal</p></div>
+      <div><h2>{{ latestMeal.name }}</h2><p>{{ latestMeal.summary || '已加入餐食紀錄' }}<br>實際用餐 {{ latestMeal.mealTime.slice(0, 5) }}・{{ Math.round(latestMeal.caloriesKcal) }} kcal</p></div>
       <time class="score" :datetime="latestMeal.createdAt">{{ formatTime(latestMeal.createdAt) }}</time>
     </article>
     <p v-else class="empty-note">今天還沒有餐食紀錄。</p>
 
     <SectionHeading title="今日餐食" :description="mealCountDescription" to="/record" action-label="新增" />
-    <MealTimeline :meals="summary?.todayMeals ?? []" />
+    <MealTimeline
+      :meals="summary?.todayMeals ?? []"
+      @edit="editingMeal = $event"
+      @delete="deletingMeal = $event"
+    />
+    <MealEditDialog
+      :open="Boolean(editingMeal)"
+      :meal="editingMeal"
+      :saving="savingEdit"
+      @close="!savingEdit && (editingMeal = null)"
+      @save="saveMeal"
+    />
+    <MealDeleteDialog
+      :open="Boolean(deletingMeal)"
+      :meal="deletingMeal"
+      :deleting="deleting"
+      @close="!deleting && (deletingMeal = null)"
+      @confirm="deleteMeal"
+    />
   </div>
 </template>

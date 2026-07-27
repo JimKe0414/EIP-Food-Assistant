@@ -32,6 +32,7 @@ export default defineEventHandler(async (event) => {
         userId: user.id,
         clientRequestId: `eip:${parsed.fileHash}:${index}`,
         mealDate: row.mealDate,
+        mealTime: '12:00:00',
         mealType: 'lunch' as const,
         source: 'eip' as const,
         name: row.name,

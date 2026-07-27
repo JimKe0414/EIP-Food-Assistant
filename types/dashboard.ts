@@ -1,6 +1,7 @@
 export interface DashboardMeal {
   id: string
   mealDate: string
+  mealTime: string
   mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack'
   source: 'manual' | 'photo' | 'voice' | 'eip' | 'custom' | 'tfda'
   name: string
