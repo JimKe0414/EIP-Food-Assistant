@@ -1,8 +1,17 @@
 import { PgBoss } from 'pg-boss'
 import postgres from 'postgres'
-import { AiProviderError } from '../shared/domain/ai'
+import { AiProviderError, enforceLunchRecommendationPolicy } from '../shared/domain/ai'
+import {
+  eipMenuImportResultSchema,
+  mergeEipNutritionEstimates,
+  missingEipNutritionFields,
+  toEipNutritionEstimateInput,
+  type EipCatalogItem,
+  type EipNutritionEstimateResult
+} from '../shared/domain/eip-catalog'
 import { AI_QUEUE, TFDA_QUEUE, aiJobSchema } from '../shared/domain/jobs'
 import { aiConfigurationFromEnv, createAiProvider, validateAiConfiguration } from '../server/services/ai'
+import { enrichMealAnalysisWithNutrients } from '../server/services/meals/nutrient-match'
 
 const connectionString = process.env.DATABASE_URL
 if (!connectionString) throw new Error('DATABASE_URL is required')
@@ -30,9 +39,24 @@ await boss.work(AI_QUEUE, { batchSize: 1, localConcurrency: 1 }, async ([job]) =
   try {
     const provider = createAiProvider(aiConfig, purpose)
     let output: object
-    if (task.type === 'analyzeMeal') output = await provider.analyzeMeal(task.input)
-    else if (task.type === 'transcribeMeal') output = await provider.transcribeMeal(Buffer.from(task.audioBase64, 'base64'), task.mimeType)
-    else output = await provider.recommendLunch(task.context)
+    if (task.type === 'analyzeMeal') {
+      const analyzed = await provider.analyzeMeal(task.input)
+      output = await enrichMealAnalysisWithNutrients(analyzed, sql, query => provider.estimatePortionGrams(query))
+    } else if (task.type === 'transcribeMeal') output = await provider.transcribeMeal(Buffer.from(task.audioBase64, 'base64'), task.mimeType)
+    else if (task.type === 'recommendLunch') output = enforceLunchRecommendationPolicy(task.context, await provider.recommendLunch(task.context))
+    else {
+      const estimateInputs = task.items
+        .filter(item => missingEipNutritionFields(item).length > 0)
+        .map(toEipNutritionEstimateInput)
+      const estimates: EipNutritionEstimateResult['items'] = []
+      for (let index = 0; index < estimateInputs.length; index += 40) {
+        const batch = await provider.estimateEipMenuNutrition(estimateInputs.slice(index, index + 40))
+        estimates.push(...batch.items)
+      }
+      const completedItems = mergeEipNutritionEstimates(task.items, { items: estimates })
+      const imported = await persistEipMenu(completedItems, estimateInputs.length)
+      output = eipMenuImportResultSchema.parse({ ...imported, fileHash: task.fileHash })
+    }
 
     await audit(task.userId, task.type, providerName, 'success', Date.now() - started)
     return output
@@ -63,6 +87,26 @@ async function audit(userId: string, jobType: string, provider: string, status: 
     insert into ai_audit_events (user_id, job_type, provider, status, duration_ms, error_code)
     values (${userId}, ${jobType}, ${provider}, ${status}, ${durationMs}, ${errorCode ?? null})
   `
+}
+
+async function persistEipMenu(items: EipCatalogItem[], estimated: number) {
+  const webUrl = process.env.WEB_INTERNAL_URL || 'http://web:3000'
+  const token = process.env.INTERNAL_WORKER_TOKEN || ''
+  if (!token) throw new Error('INTERNAL_WORKER_TOKEN is required for EIP menu import')
+  const response = await fetch(`${webUrl.replace(/\/$/, '')}/api/internal/eip-menu-import`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-internal-worker-token': token
+    },
+    body: JSON.stringify({ items, estimated }),
+    signal: AbortSignal.timeout(60_000)
+  })
+  if (!response.ok) {
+    const detail = (await response.text().catch(() => '')).trim().slice(0, 500)
+    throw new Error(`EIP menu import returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`)
+  }
+  return eipMenuImportResultSchema.parse(await response.json())
 }
 
 async function shutdown() {

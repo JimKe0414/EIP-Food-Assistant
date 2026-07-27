@@ -1,4 +1,6 @@
 import type { Profile, RecordMode } from '~/types/diet'
+import type { HealthGoal, UserPreferencesInput } from '~/shared/domain/preferences'
+import { DEFAULT_USER_PREFERENCES } from '~/shared/domain/preferences'
 
 const goalCopy: Record<string, string> = {
   均衡飲食: '依據過去 7 天用餐內容，優先推薦較少吃到或尚未點過的餐點。',
@@ -10,16 +12,9 @@ export function useDietApp() {
   const quickRecordOpen = useState('quick-record-open', () => false)
   const recordMode = useState<RecordMode>('record-mode', () => 'photo')
   const toast = useState('toast', () => '')
-  const goal = useState('goal', () => '均衡飲食')
-  const profile = useState<Profile>('profile', () => ({
-    age: 35,
-    sex: 'male',
-    height: 173,
-    weight: 68.2,
-    bodyFat: 21.5,
-    muscle: 29.8,
-    activity: 1.2
-  }))
+  const goal = useState<HealthGoal>('goal', () => DEFAULT_USER_PREFERENCES.healthGoal)
+  const reminderEnabled = useState('reminder-enabled', () => DEFAULT_USER_PREFERENCES.reminderEnabled)
+  const profile = useState<Profile | null>('profile', () => null)
 
   const goalDescription = computed(() => goalCopy[goal.value] ?? goalCopy.均衡飲食)
 
@@ -29,6 +24,15 @@ export function useDietApp() {
 
   function closeQuickRecord() {
     quickRecordOpen.value = false
+  }
+
+  function applyProfile(value: Profile | null) {
+    profile.value = value
+  }
+
+  function applyPreferences(value: UserPreferencesInput) {
+    goal.value = value.healthGoal
+    reminderEnabled.value = value.reminderEnabled
   }
 
   async function chooseRecordMode(mode: RecordMode) {
@@ -52,7 +56,10 @@ export function useDietApp() {
     toast,
     goal,
     goalDescription,
+    reminderEnabled,
     profile,
+    applyProfile,
+    applyPreferences,
     openQuickRecord,
     closeQuickRecord,
     chooseRecordMode,

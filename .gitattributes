@@ -1,0 +1,4 @@
+# scripts/migrate.mjs checksums these files byte-for-byte against what was recorded when
+# first applied; letting Windows' core.autocrlf flip them between LF/CRLF on checkout
+# breaks that check even though the SQL content hasn't actually changed.
+db/migrations/*.sql text eol=lf

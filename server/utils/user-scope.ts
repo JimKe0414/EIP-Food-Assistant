@@ -26,20 +26,21 @@ export async function getUserSession(event: H3Event) {
     emailDomain?: string
     oauthState?: string
     oauthVerifier?: string
+    returnTo?: string
   }>(event, {
     name: 'food_session',
     password: config.sessionPassword,
     cookie: {
       httpOnly: true,
-      secure: !import.meta.dev,
-      sameSite: 'strict',
+      secure: useSecureCookies(),
+      sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60 * 8
     }
   })
 }
 
-type DatabaseTransaction = Parameters<Parameters<ReturnType<typeof useDatabase>['transaction']>[0]>[0]
+export type DatabaseTransaction = Parameters<Parameters<ReturnType<typeof useDatabase>['transaction']>[0]>[0]
 
 export async function withUserScope<T>(userId: string, callback: (database: DatabaseTransaction) => Promise<T>): Promise<T> {
   return useDatabase().transaction(async transaction => {

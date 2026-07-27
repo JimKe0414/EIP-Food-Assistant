@@ -12,6 +12,10 @@ export default defineEventHandler(async (event) => {
   const session = await getUserSession(event)
   const storedState = String(session.data.oauthState ?? '')
   const verifier = String(session.data.oauthVerifier ?? '')
+  const requestedReturnTo = String(session.data.returnTo ?? '/')
+  const returnTo = requestedReturnTo.startsWith('/') && !requestedReturnTo.startsWith('//')
+    ? requestedReturnTo
+    : '/'
 
   if (!code || !state || !storedState || !safeEqual(state, storedState) || !verifier) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid OAuth state' })
@@ -35,7 +39,10 @@ export default defineEventHandler(async (event) => {
   })
   const email = String(payload.email ?? '').trim().toLowerCase()
   const domain = email.split('@')[1]
-  if (!email || domain !== config.googleWorkspaceDomain || payload.email_verified !== true) {
+  if (!email || payload.email_verified !== true) {
+    throw createError({ statusCode: 403, statusMessage: 'Verified Google account is required' })
+  }
+  if (config.googleWorkspaceDomain && domain !== config.googleWorkspaceDomain) {
     throw createError({ statusCode: 403, statusMessage: 'Workspace account is not allowed' })
   }
 
@@ -44,6 +51,6 @@ export default defineEventHandler(async (event) => {
     target: users.identityHmac,
     set: { updatedAt: new Date() }
   }).returning()
-  await session.update({ userId: user.id, emailDomain: domain, oauthState: undefined, oauthVerifier: undefined })
-  return sendRedirect(event, '/')
+  await session.update({ userId: user.id, emailDomain: domain, oauthState: undefined, oauthVerifier: undefined, returnTo: undefined })
+  return sendRedirect(event, returnTo)
 })

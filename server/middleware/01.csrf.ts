@@ -1,7 +1,8 @@
 import { safeEqual } from '~/server/utils/identity'
 
 const excludedPaths = new Set([
-  '/api/internal/tfda-sync'
+  '/api/internal/tfda-sync',
+  '/api/internal/eip-menu-import'
 ])
 
 export default defineEventHandler((event) => {

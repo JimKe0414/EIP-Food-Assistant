@@ -5,7 +5,7 @@ const route = useRoute()
 const runtimeConfig = useRuntimeConfig()
 const { data: session } = await useFetch<{ authenticated: boolean, emailDomain: string | null }>('/api/auth/session')
 const { post } = useApi()
-const processingLabel = computed(() => runtimeConfig.public.aiProcessingMode === 'cloud' ? '雲端核准處理' : '地端安全處理')
+const processingLabel = computed(() => runtimeConfig.public.aiProcessingMode === 'cloud' ? 'AI 在雲端分析' : 'AI 在內部環境分析')
 
 function isActive(to: string) {
   return to === '/' ? route.path === '/' : route.path.startsWith(to)
@@ -38,7 +38,7 @@ async function logout() {
 
     <div v-if="session?.authenticated" class="account-card">
       <div class="avatar">我</div>
-      <div><b>Workspace 使用者</b><span>{{ session.emailDomain }}</span></div>
+      <div><b>已登入使用者</b><span>{{ session.emailDomain }}</span></div>
       <button type="button" aria-label="登出" @click="logout"><Icon name="solar:logout-2-linear" /></button>
     </div>
     <NuxtLink v-else class="button button--soft button--wide" to="/login">登入</NuxtLink>

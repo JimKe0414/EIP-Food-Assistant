@@ -1,0 +1,1 @@
+ALTER TABLE meals ADD COLUMN IF NOT EXISTS summary varchar(500);

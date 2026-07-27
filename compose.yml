@@ -8,8 +8,8 @@ services:
       dockerfile: Dockerfile
       target: web-runtime
     restart: unless-stopped
-    ports:
-      - "${WEB_PORT:-3000}:3000"
+    expose:
+      - "3000"
     environment:
       NODE_ENV: production
       NITRO_HOST: 0.0.0.0
@@ -18,13 +18,40 @@ services:
       SESSION_PASSWORD: ${SESSION_PASSWORD:-development-session-password-change-me-32-chars}
       IDENTITY_HMAC_SECRET: ${IDENTITY_HMAC_SECRET:-development-identity-hmac-secret-change-me}
       INTERNAL_WORKER_TOKEN: ${INTERNAL_WORKER_TOKEN:-development-internal-worker-token-change-me}
-      GOOGLE_WORKSPACE_DOMAIN: ${GOOGLE_WORKSPACE_DOMAIN:-example.com}
+      AUTH_MODE: ${AUTH_MODE:-dev}
+      GOOGLE_WORKSPACE_DOMAIN: ${GOOGLE_WORKSPACE_DOMAIN:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3000/api/auth/google-callback}
-      ALLOW_DEV_AUTH: ${ALLOW_DEV_AUTH:-false}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-https://localhost:3000/api/auth/google-callback}
+      ALLOW_DEV_AUTH: ${ALLOW_DEV_AUTH:-true}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       TFDA_AUTO_DOWNLOAD: ${TFDA_AUTO_DOWNLOAD:-false}
       TFDA_NUTRIENT_XLSX_URL: ${TFDA_NUTRIENT_XLSX_URL:-https://consumer.fda.gov.tw/uc/GetFile.ashx?type=ServerFile&id=4862259227103213368}
+      APP_TIME_ZONE: ${APP_TIME_ZONE:-Asia/Taipei}
+      # Nuxt's runtimeConfig is baked at `nuxt build` time from process.env, but .dockerignore
+      # excludes .env from the build context (correctly - secrets shouldn't land in the image).
+      # These NUXT_-prefixed duplicates are Nuxt's documented runtime-override convention:
+      # Nitro re-reads them at container startup and overrides the build-time-baked defaults
+      # above. Without these, useRuntimeConfig() reads would silently fall back to whatever
+      # nuxt.config.ts's defaults were, ignoring everything set here.
+      NUXT_DATABASE_URL: postgresql://${POSTGRES_USER:-food_app}:${POSTGRES_PASSWORD:-local-only-change-me}@postgres:5432/${POSTGRES_DB:-first_choice_food}
+      NUXT_SESSION_PASSWORD: ${SESSION_PASSWORD:-development-session-password-change-me-32-chars}
+      NUXT_IDENTITY_HMAC_SECRET: ${IDENTITY_HMAC_SECRET:-development-identity-hmac-secret-change-me}
+      NUXT_INTERNAL_WORKER_TOKEN: ${INTERNAL_WORKER_TOKEN:-development-internal-worker-token-change-me}
+      NUXT_AUTH_MODE: ${AUTH_MODE:-dev}
+      NUXT_GOOGLE_WORKSPACE_DOMAIN: ${GOOGLE_WORKSPACE_DOMAIN:-}
+      NUXT_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      NUXT_GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      NUXT_GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-https://localhost:3000/api/auth/google-callback}
+      NUXT_ALLOW_DEV_AUTH: ${ALLOW_DEV_AUTH:-true}
+      NUXT_TFDA_AUTO_DOWNLOAD: ${TFDA_AUTO_DOWNLOAD:-false}
+      NUXT_TFDA_NUTRIENT_XLSX_URL: ${TFDA_NUTRIENT_XLSX_URL:-https://consumer.fda.gov.tw/uc/GetFile.ashx?type=ServerFile&id=4862259227103213368}
+      NUXT_APP_TIME_ZONE: ${APP_TIME_ZONE:-Asia/Taipei}
+      NUXT_PUBLIC_AUTH_MODE: ${AUTH_MODE:-dev}
+      NUXT_PUBLIC_APP_TIME_ZONE: ${APP_TIME_ZONE:-Asia/Taipei}
+      # public.aiProcessingMode is a computed 'local'|'cloud' label (not a direct env passthrough)
+      # used only for a cosmetic UI badge; not overridden here since AI_EGRESS_MODE isn't wired
+      # to `web` at all today (only `worker` reads it to pick an AI provider).
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -41,6 +68,21 @@ services:
     networks:
       - frontend
       - backend
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3000}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./.data/caddy:/data
+      - ./.data/caddy-config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - frontend
 
   worker:
     image: first-choice-for-food-worker:local
@@ -59,6 +101,11 @@ services:
       AI_VISION_MODEL: ${AI_VISION_MODEL:-llava:13b}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       WHISPER_BASE_URL: ${WHISPER_BASE_URL:-http://whisper:8000}
+      OPENAI_COMPAT_BASE_URL: ${OPENAI_COMPAT_BASE_URL:-}
+      OPENAI_COMPAT_API_KEY: ${OPENAI_COMPAT_API_KEY:-}
+      OPENAI_COMPAT_TEXT_MODEL: ${OPENAI_COMPAT_TEXT_MODEL:-}
+      OPENAI_COMPAT_VISION_MODEL: ${OPENAI_COMPAT_VISION_MODEL:-}
+      OPENAI_COMPAT_MAX_TOKENS: ${OPENAI_COMPAT_MAX_TOKENS:-}
       GPU_CONCURRENCY: 1
       WEB_INTERNAL_URL: http://web:3000
       INTERNAL_WORKER_TOKEN: ${INTERNAL_WORKER_TOKEN:-development-internal-worker-token-change-me}

@@ -8,25 +8,29 @@ export interface Metric {
   value: string
   note: string
   progress: number
+  // No real tracking exists yet for this metric (e.g. water intake, vegetable servings) —
+  // render it as a visibly disabled placeholder instead of a fabricated number.
+  comingSoon?: boolean
 }
 
 export interface MenuItem {
+  id: string
+  source: 'eip' | 'custom' | 'tfda'
+  restaurantName?: string | null
   name: string
   kcal: string
   reason: string
-  score: number
+  rank: number | null
   protein: string
   vegetable: string
-}
-
-export interface Vendor {
-  name: string
-  description: string
-  badge: string
-  time: string
-  highlight: string
-  recent: string
-  menus: MenuItem[]
+  nutrients: {
+    caloriesKcal: number
+    proteinG: number | null
+    fatG: number | null
+    carbsG: number | null
+    fiberG: number | null
+    sodiumMg: number | null
+  }
 }
 
 export interface Profile {
@@ -35,6 +39,6 @@ export interface Profile {
   height: number
   weight: number
   bodyFat: number | null
-  muscle: number
+  muscle: number | null
   activity: number
 }

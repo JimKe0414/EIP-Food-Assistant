@@ -1,10 +1,11 @@
 import { and, desc, eq, gte, lte } from 'drizzle-orm'
 import { meals } from '~/db/schema'
+import { formatDateInTimeZone } from '~/shared/domain/date'
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
   const query = getQuery(event)
-  const today = new Date().toISOString().slice(0, 10)
+  const today = formatDateInTimeZone(new Date(), useRuntimeConfig().appTimeZone)
   const from = String(query.from ?? query.date ?? today)
   const to = String(query.to ?? query.date ?? today)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {

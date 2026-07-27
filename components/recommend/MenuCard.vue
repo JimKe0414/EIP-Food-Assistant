@@ -7,7 +7,8 @@ defineEmits<{ select: [] }>()
 
 <template>
   <button type="button" class="menu-card" :class="{ selected }" @click="$emit('select')">
-    <div class="menu-card__top"><span>推薦餐點</span><strong>{{ item.score }}<small>適合分數</small></strong></div>
+    <div class="menu-card__top"><span>{{ item.rank === null ? '菜單餐點' : '推薦餐點' }}</span><strong>{{ item.rank === null ? '—' : `#${item.rank}` }}<small>{{ item.rank === null ? '等待推薦' : '推薦順位' }}</small></strong></div>
+    <small v-if="item.restaurantName" class="menu-card__restaurant">{{ item.restaurantName }}</small>
     <h3>{{ item.name }}</h3>
     <p>{{ item.kcal }}・{{ item.reason }}</p>
     <dl><div><dt>蛋白質</dt><dd>{{ item.protein }}</dd></div><div><dt>蔬菜量</dt><dd>{{ item.vegetable }}</dd></div></dl>

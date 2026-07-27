@@ -1,6 +1,20 @@
-import { and, desc, eq, gte } from 'drizzle-orm'
-import { customFoods, eipMenuItems, meals, nutrientVersions, nutrients } from '~/db/schema'
+import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm'
+import { customFoods, eipMenuItems, eipRestaurants, meals, nutrientVersions, nutrients, profileSnapshots } from '~/db/schema'
+import { calculateBodyMetrics } from '~/shared/domain/body-metrics'
+import { getMockLunchCandidates } from '~/server/services/lunch/mock-candidates'
 import { getTfdaFreshness } from '~/shared/domain/tfda'
+import { formatDateInTimeZone, shiftIsoDate } from '~/shared/domain/date'
+import { healthGoalSchema } from '~/shared/domain/preferences'
+import { lunchFoodTypeSchema } from '~/shared/domain/ai'
+import { z } from 'zod'
+
+const requestSchema = z.object({
+  goal: healthGoalSchema.default('均衡飲食'),
+  foodType: lunchFoodTypeSchema.default('meat'),
+  serviceDate: z.iso.date().optional(),
+  restaurantId: z.uuid().nullable().optional(),
+  useMockData: z.boolean().default(false)
+})
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
@@ -10,36 +24,116 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 429, statusMessage: 'Too Many Requests' })
   }
 
-  const body = await readBody<{ goal?: string, serviceDate?: string }>(event)
-  const serviceDate = body.serviceDate || new Date().toISOString().slice(0, 10)
-  const goal = String(body.goal || '均衡飲食').slice(0, 80)
-  const scoped = await withUserScope(user.id, async database => {
-    const eip = await database.select().from(eipMenuItems).where(and(eq(eipMenuItems.userId, user.id), eq(eipMenuItems.serviceDate, serviceDate))).limit(60)
-    const custom = eip.length ? [] : await database.select().from(customFoods).where(eq(customFoods.userId, user.id)).limit(60)
+  const body = await readValidatedBody(event, value => requestSchema.parse(value))
+  const serviceDate = body.serviceDate ?? formatDateInTimeZone(new Date(), useRuntimeConfig().appTimeZone)
+  const { goal, foodType, useMockData, restaurantId } = body
+  const scoped = useMockData ? {
+    freshness: getTfdaFreshness(new Date()),
+    recent: foodType === 'veg'
+      ? [{ name: '香煎豆腐餐盒' }, { name: '鷹嘴豆沙拉' }]
+      : [{ name: '香煎雞腿便當' }, { name: '雞肉沙拉' }],
+    snapshot: null,
+    eatenToday: null,
+    candidates: getMockLunchCandidates(foodType)
+  } : await withUserScope(user.id, async database => {
+    const eipFoodTypes = foodType === 'veg' ? ['veg'] as const : ['meat', 'unknown'] as const
+    const eip = await database.select({
+      id: eipMenuItems.id,
+      restaurantId: eipRestaurants.id,
+      restaurantName: eipRestaurants.name,
+      name: eipMenuItems.name,
+      caloriesKcal: eipMenuItems.caloriesKcal,
+      proteinG: eipMenuItems.proteinG,
+      fatG: eipMenuItems.fatG,
+      carbsG: eipMenuItems.carbsG
+    }).from(eipMenuItems)
+      .innerJoin(eipRestaurants, eq(eipRestaurants.id, eipMenuItems.restaurantId))
+      .where(and(
+        inArray(eipMenuItems.foodType, eipFoodTypes),
+        restaurantId ? eq(eipMenuItems.restaurantId, restaurantId) : undefined
+      ))
+      .limit(60)
+    const custom = restaurantId || eip.length || foodType === 'veg'
+      ? []
+      : await database.select().from(customFoods).where(eq(customFoods.userId, user.id)).limit(60)
     const [version] = await database.select().from(nutrientVersions).orderBy(desc(nutrientVersions.syncedAt)).limit(1)
     const freshness = getTfdaFreshness(version?.syncedAt ?? null)
-    const publicFoods = eip.length || custom.length || freshness.status === 'expired'
+    const publicFoods = restaurantId || foodType === 'veg' || eip.length || custom.length || freshness.status === 'expired'
       ? []
       : await database.select().from(nutrients).limit(60)
-    const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10)
+    const sevenDaysAgo = shiftIsoDate(serviceDate, -6)
     const recent = await database.select({ name: meals.name }).from(meals).where(and(eq(meals.userId, user.id), gte(meals.mealDate, sevenDaysAgo))).orderBy(desc(meals.mealDate)).limit(50)
+
+    const [snapshot] = await database.select().from(profileSnapshots).where(eq(profileSnapshots.userId, user.id)).orderBy(desc(profileSnapshots.measuredAt)).limit(1)
+    const [eatenToday] = snapshot
+      ? await database.select({
+          caloriesKcal: sql<string>`coalesce(sum(${meals.caloriesKcal}), 0)`,
+          proteinG: sql<string>`coalesce(sum(${meals.proteinG}), 0)`,
+          fatG: sql<string>`coalesce(sum(${meals.fatG}), 0)`,
+          carbsG: sql<string>`coalesce(sum(${meals.carbsG}), 0)`
+        }).from(meals).where(and(eq(meals.userId, user.id), eq(meals.mealDate, serviceDate)))
+      : [null]
+
     return {
       freshness,
       recent,
+      snapshot,
+      eatenToday,
       candidates: [
-        ...eip.map(item => ({ id: `eip:${item.id}`, source: 'eip', name: item.name, caloriesKcal: Number(item.caloriesKcal), proteinG: numberOrNull(item.proteinG), fatG: numberOrNull(item.fatG), carbsG: numberOrNull(item.carbsG) })),
+        ...eip.map(item => ({
+          id: `eip:${item.id}`,
+          source: 'eip',
+          restaurantId: item.restaurantId,
+          restaurantName: item.restaurantName,
+          name: item.name,
+          caloriesKcal: Number(item.caloriesKcal),
+          proteinG: numberOrNull(item.proteinG),
+          fatG: numberOrNull(item.fatG),
+          carbsG: numberOrNull(item.carbsG)
+        })),
         ...custom.map(item => ({ id: `custom:${item.id}`, source: 'custom', name: item.name, caloriesKcal: Number(item.caloriesKcal), proteinG: numberOrNull(item.proteinG), fatG: numberOrNull(item.fatG), carbsG: numberOrNull(item.carbsG) })),
         ...publicFoods.map(item => ({ id: `tfda:${item.sampleId}`, source: 'tfda', name: item.name, caloriesKcal: Number(item.caloriesKcal ?? 0), proteinG: numberOrNull(item.proteinG), fatG: numberOrNull(item.fatG), carbsG: numberOrNull(item.carbsG) }))
       ]
     }
   })
-  const { candidates, freshness, recent } = scoped
+  const { candidates, freshness, recent, snapshot, eatenToday } = scoped
   if (!candidates.length) throw createError({ statusCode: 503, statusMessage: 'No lunch candidates are currently available' })
+
+  // Budget remaining *for the rest of today* (daily target minus what's already been
+  // logged), not the flat daily target — the AI should be picking a lunch that fits what's
+  // left, not re-suggesting the user's entire day's allowance in one meal.
+  const nutrientTargets = snapshot && eatenToday
+    ? (() => {
+        const metrics = calculateBodyMetrics({
+          age: snapshot.age,
+          sex: snapshot.sex,
+          height: Number(snapshot.heightCm),
+          weight: Number(snapshot.weightKg),
+          bodyFat: snapshot.bodyFatPercent === null ? null : Number(snapshot.bodyFatPercent),
+          muscle: snapshot.muscleKg === null ? null : Number(snapshot.muscleKg),
+          activity: Number(snapshot.activityFactor)
+        })
+        const remaining = (target: number, eaten: string) => Math.max(0, Math.round(target - Number(eaten)))
+        return {
+          caloriesKcal: remaining(metrics.tdee, eatenToday.caloriesKcal),
+          proteinG: remaining(metrics.proteinTargetG, eatenToday.proteinG),
+          fatG: remaining(metrics.fatTargetG, eatenToday.fatG),
+          carbsG: remaining(metrics.carbsTargetG, eatenToday.carbsG)
+        }
+      })()
+    : {}
 
   const jobId = await enqueueAiJob({
     type: 'recommendLunch',
     userId: user.id,
-    context: { goal, candidateIds: candidates.map(candidate => candidate.id), recentMealNames: recent.map(item => item.name), nutrientTargets: {} }
+    context: {
+      goal,
+      foodType,
+      candidateIds: candidates.map(candidate => candidate.id),
+      candidates,
+      recentMealNames: recent.map(item => item.name),
+      nutrientTargets
+    }
   })
 
   setResponseStatus(event, 202)
@@ -48,7 +142,11 @@ export default defineEventHandler(async (event) => {
     statusUrl: `/api/jobs/${jobId}`,
     candidates,
     nutrientFreshness: freshness,
-    warning: freshness.status === 'stale' ? `營養資料可能較舊（${freshness.ageDays} 天前更新）` : undefined,
+    dataMode: useMockData ? 'mock' : 'live',
+    restaurantId: restaurantId ?? null,
+    warning: useMockData
+      ? 'FocusIT API 已使用固定假菜單完成測試'
+      : freshness.status === 'stale' ? `營養資料可能較舊（${freshness.ageDays} 天前更新）` : undefined,
     rateLimitRemaining: rate.remaining
   }
 })

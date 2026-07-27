@@ -7,11 +7,25 @@ import * as XLSX from 'xlsx'
 import { nutrientSyncLogs, nutrientVersions, nutrients, nutrientsStaging } from '~/db/schema'
 import { parseTfdaNumeric } from '~/shared/domain/tfda'
 
-const requiredColumns = [
-  '樣品編號', '樣品名稱', '俗名', '內容物描述', '廢棄率（%）', '熱量（kcal）', '修正熱量（kcal）',
-  '水分（g）', '粗蛋白（g）', '粗脂肪（g）', '飽和脂肪（g）', '灰分（g）',
-  '總碳水化合物（g）', '膳食纖維（g）', '糖質（g）'
-]
+// Each entry lists accepted column-name synonyms for that field (newest naming first).
+// TFDA has renamed columns across dataset revisions (e.g. 2025版UPDATE1 uses 整合編號/糖質總量).
+const requiredColumnAliases: Record<string, string[]> = {
+  sampleId: ['整合編號', '樣品編號'],
+  name: ['樣品名稱'],
+  aliases: ['俗名'],
+  description: ['內容物描述'],
+  wastePercent: ['廢棄率（%）'],
+  caloriesKcal: ['熱量（kcal）'],
+  adjustedCaloriesKcal: ['修正熱量（kcal）'],
+  waterG: ['水分（g）'],
+  proteinG: ['粗蛋白（g）'],
+  fatG: ['粗脂肪（g）'],
+  saturatedFatG: ['飽和脂肪（g）'],
+  ashG: ['灰分（g）'],
+  carbsG: ['總碳水化合物（g）'],
+  fiberG: ['膳食纖維（g）'],
+  sugarG: ['糖質總量（g）', '糖質（g）']
+}
 const optionalColumns = [
   '膽固醇（mg）', '鈉（mg）', '鉀（mg）', '鈣（mg）', '鎂（mg）', '鐵（mg）', '鋅（mg）', '磷（mg）',
   '維生素A（μgRE）', '維生素B1（mg）', '維生素B2（mg）', '菸鹼素（mg）', '維生素C（mg）', '維生素E（mg）'
@@ -94,45 +108,83 @@ export async function syncTfdaFromUrl(url: string) {
   }
 }
 
-function parseWorkbook(buffer: Buffer, fileHash: string) {
+// TFDA workbooks sometimes carry a merged footnote row above the real header row
+// (e.g. 2025版UPDATE1 has the header on row 2, not row 1). Scan a few candidate
+// starting rows and use the first one where every required column can be found.
+const maxHeaderRowScan = 4
+
+export function parseWorkbook(buffer: Buffer, fileHash: string) {
   const workbook = XLSX.read(buffer, { type: 'buffer', raw: true })
   const sheet = workbook.Sheets[workbook.SheetNames[0]]
   if (!sheet) throw new Error('TFDA workbook does not contain Sheet 1')
-  const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
+
+  const { rawRows, headerMap } = locateHeaderRow(sheet)
   if (!rawRows.length) throw new Error('TFDA workbook is empty')
-  const headerMap = new Map(Object.keys(rawRows[0]).map(header => [normalize(header), header]))
-  const missing = requiredColumns.filter(column => !headerMap.has(normalize(column)))
+
+  const missing = Object.entries(requiredColumnAliases)
+    .filter(([, aliases]) => !aliases.some(alias => headerMap.has(normalize(alias))))
+    .map(([, aliases]) => aliases[0])
   if (missing.length) throw new Error(`TFDA required columns missing: ${missing.join(', ')}`)
 
-  const known = new Set([...requiredColumns, ...optionalColumns].map(normalize))
+  const known = new Set([...Object.values(requiredColumnAliases).flat(), ...optionalColumns].map(normalize))
   const unknown = [...headerMap.keys()].filter(column => !known.has(column))
   const warnings = unknown.length ? [`發現 ${unknown.length} 個未知欄位，已忽略`] : []
   const columnsHash = sha256(Buffer.from([...headerMap.keys()].sort().join('\n')))
 
-  const rows = rawRows.map((raw, index) => {
+  const rows = rawRows.flatMap((raw, index) => {
     const row = Object.fromEntries(Object.entries(raw).map(([key, value]) => [normalize(key), value]))
     const traceFields: string[] = []
-    const number = (column: string) => {
+    const pick = (field: string) => {
+      const alias = requiredColumnAliases[field].find(candidate => normalize(candidate) in row)
+      return alias ? row[normalize(alias)] : undefined
+    }
+    const number = (field: string) => {
+      const parsed = parseTfdaNumeric(pick(field))
+      if (parsed.isTrace) traceFields.push(requiredColumnAliases[field][0])
+      return parsed.value
+    }
+    const optionalNumber = (column: string) => {
       const parsed = parseTfdaNumeric(row[normalize(column)])
       if (parsed.isTrace) traceFields.push(column)
       return parsed.value
     }
-    const sampleId = String(row[normalize('樣品編號')] ?? '').trim()
-    const name = String(row[normalize('樣品名稱')] ?? '').trim()
+    const sampleId = String(pick('sampleId') ?? '').trim()
+    const name = String(pick('name') ?? '').trim()
+    // The sheet has occasional fully-blank rows (section breaks); skip those, but a row
+    // with only one of the two identifiers filled in is a genuine data problem.
+    if (!sampleId && !name) return []
     if (!sampleId || !name) throw new Error(`TFDA row ${index + 2} is missing sample ID or name`)
 
-    return {
+    return [{
       sampleId, name,
-      aliases: String(row[normalize('俗名')] ?? '').trim() || null,
-      description: String(row[normalize('內容物描述')] ?? '').trim() || null,
-      wastePercent: number('廢棄率（%）'), caloriesKcal: number('熱量（kcal）'), adjustedCaloriesKcal: number('修正熱量（kcal）'),
-      waterG: number('水分（g）'), proteinG: number('粗蛋白（g）'), fatG: number('粗脂肪（g）'), saturatedFatG: number('飽和脂肪（g）'),
-      ashG: number('灰分（g）'), carbsG: number('總碳水化合物（g）'), fiberG: number('膳食纖維（g）'), sugarG: number('糖質（g）'),
-      optionalNutrients: Object.fromEntries(optionalColumns.map(column => [column, number(column)])),
+      aliases: String(pick('aliases') ?? '').trim() || null,
+      description: String(pick('description') ?? '').trim() || null,
+      wastePercent: number('wastePercent'), caloriesKcal: number('caloriesKcal'),
+      adjustedCaloriesKcal: number('adjustedCaloriesKcal'),
+      waterG: number('waterG'), proteinG: number('proteinG'), fatG: number('fatG'),
+      saturatedFatG: number('saturatedFatG'),
+      ashG: number('ashG'), carbsG: number('carbsG'), fiberG: number('fiberG'),
+      sugarG: number('sugarG'),
+      optionalNutrients: Object.fromEntries(optionalColumns.map(column => [column, optionalNumber(column)])),
       traceFields, versionHash: fileHash
-    }
+    }]
   })
   return { rows, columnsHash, warnings }
+}
+
+function locateHeaderRow(sheet: XLSX.WorkSheet) {
+  const requiredAliasList = Object.values(requiredColumnAliases)
+  let fallback: { rawRows: Record<string, unknown>[], headerMap: Map<string, string> } | null = null
+
+  for (let offset = 0; offset <= maxHeaderRowScan; offset++) {
+    const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '', range: offset })
+    if (!rawRows.length) continue
+    const headerMap = new Map(Object.keys(rawRows[0]).map(header => [normalize(header), header]))
+    if (!fallback) fallback = { rawRows, headerMap }
+    const allFound = requiredAliasList.every(aliases => aliases.some(alias => headerMap.has(normalize(alias))))
+    if (allFound) return { rawRows, headerMap }
+  }
+  return fallback ?? { rawRows: [], headerMap: new Map<string, string>() }
 }
 
 function normalize(value: string) { return value.replaceAll(/\s+/g, '').replaceAll('(', '（').replaceAll(')', '）').toLowerCase() }
