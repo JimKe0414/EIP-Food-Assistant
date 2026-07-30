@@ -27,6 +27,17 @@ export function formatDateTimeLocalInTimeZone(date: Date, timeZone = DEFAULT_APP
   return `${formatDateInTimeZone(date, timeZone)}T${formatTimeInTimeZone(date, timeZone).slice(0, 5)}`
 }
 
+export function formatIsoDateChartLabel(value: string, locale = 'zh-TW') {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('Date must use YYYY-MM-DD')
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  const weekday = new Intl.DateTimeFormat(locale, {
+    timeZone: 'UTC',
+    weekday: 'narrow'
+  }).format(date)
+  return `${month}/${day} ${weekday}`
+}
+
 export function shiftIsoDate(value: string, days: number) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('Date must use YYYY-MM-DD')
   const [year, month, day] = value.split('-').map(Number)

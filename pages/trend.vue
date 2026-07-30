@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { Metric } from '~/types/diet'
 import type { DashboardSummary } from '~/types/dashboard'
+import { formatIsoDateChartLabel } from '~/shared/domain/date'
 
-const labels = ['一', '二', '三', '四', '五', '六', '日']
 const { data: summary } = await useFetch<DashboardSummary>('/api/meals/summary', { key: 'meal-summary' })
 
 const daily = computed(() => summary.value?.daily ?? [])
@@ -10,8 +10,11 @@ const targets = computed(() => summary.value?.targets ?? null)
 
 const calorieBars = computed(() => {
   const target = targets.value?.caloriesKcal
-  if (!target) return daily.value.map(() => 0)
-  return daily.value.map(day => Math.min(100, Math.round(day.caloriesKcal / target * 100)))
+  return daily.value.map(day => ({
+    date: day.date,
+    label: formatIsoDateChartLabel(day.date),
+    value: target ? Math.min(100, Math.round(day.caloriesKcal / target * 100)) : 0
+  }))
 })
 
 const averageCalories = computed(() => {
@@ -67,8 +70,8 @@ useSeoMeta({ title: '營養趨勢｜一食之選' })
       <section class="chart-card calories-chart">
         <header><div><span>每日熱量</span><h2>平均 {{ averageCalories.toLocaleString() }} kcal</h2></div><small>{{ targets ? `目標 ${targets.caloriesKcal.toLocaleString()}` : '尚未設定目標' }}</small></header>
         <div class="bars" aria-label="每日熱量佔目標百分比長條圖">
-          <div v-for="(value, index) in calorieBars" :key="labels[index]" class="bar-column">
-            <div><i :style="{ height: `${value}%` }"><span>{{ value }}%</span></i></div><small>{{ labels[index] }}</small>
+          <div v-for="bar in calorieBars" :key="bar.date" class="bar-column">
+            <div><i :style="{ height: `${bar.value}%` }"><span>{{ bar.value }}%</span></i></div><small>{{ bar.label }}</small>
           </div>
         </div>
       </section>
