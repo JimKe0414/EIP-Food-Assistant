@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   formatDateInTimeZone,
   formatDateTimeLocalInTimeZone,
+  formatIsoDateChartLabel,
   formatTimeInTimeZone,
   isoDateRangeEndingOn,
   shiftIsoDate
@@ -22,6 +23,11 @@ describe('application dates', () => {
       '2026-03-02',
       '2026-03-03'
     ])
+  })
+
+  it('formats each chart label from its actual date', () => {
+    expect(formatIsoDateChartLabel('2026-07-24')).toBe('7/24 五')
+    expect(formatIsoDateChartLabel('2026-07-30')).toBe('7/30 四')
   })
 
   it('formats the actual meal time in the application timezone', () => {
