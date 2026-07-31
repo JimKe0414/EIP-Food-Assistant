@@ -52,6 +52,59 @@ test('photo drop zone accepts a desktop drag-and-drop file', async ({ page }) =>
   }, { timeout: 20_000 }).toBe(true)
 })
 
+test('voice recording can be stopped and previewed before analysis', async ({ page }) => {
+  await page.addInitScript(() => {
+    class FakeMediaRecorder {
+      static isTypeSupported() { return true }
+      state: RecordingState = 'inactive'
+      mimeType = 'audio/webm'
+      ondataavailable: ((event: BlobEvent) => void) | null = null
+      onstop: (() => void) | null = null
+      onerror: (() => void) | null = null
+
+      constructor(_stream: MediaStream, options?: MediaRecorderOptions) {
+        if (options?.mimeType) this.mimeType = options.mimeType
+      }
+
+      start() {
+        this.state = 'recording'
+      }
+
+      stop() {
+        this.state = 'inactive'
+        this.ondataavailable?.({ data: new Blob(['recorded voice'], { type: this.mimeType }) } as BlobEvent)
+        this.onstop?.()
+      }
+    }
+
+    Object.defineProperty(window, 'MediaRecorder', { configurable: true, value: FakeMediaRecorder })
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: async () => ({
+          getTracks: () => [{ stop: () => undefined }]
+        })
+      }
+    })
+  })
+
+  await page.goto('/record')
+  const voiceTab = page.getByRole('tab', { name: '語音' })
+  await expect.poll(async () => {
+    await voiceTab.click()
+    return voiceTab.getAttribute('aria-selected')
+  }, { timeout: 20_000 }).toBe('true')
+  await page.getByRole('button', { name: '開始錄音' }).click()
+  await expect(page.locator('h2[aria-live="polite"]')).toContainText('正在錄音')
+  await page.getByRole('button', { name: '停止錄音' }).click()
+
+  await expect(page.getByRole('heading', { name: '錄音完成，請先播放確認' })).toBeVisible()
+  await expect(page.getByLabel('錄音預覽')).toBeVisible()
+  await expect(page.getByRole('button', { name: '辨識並分析餐食' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '重新錄音' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '刪除錄音' })).toBeVisible()
+})
+
 test('recognized meals can be multi-selected with an explicit meal period and time', async ({ page }) => {
   let savedBody: { meals?: Array<Record<string, unknown>> } | undefined
   await page.route('**/api/csrf-token', route => route.fulfill({ json: { token: 'test-token' } }))
