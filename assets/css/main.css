@@ -186,6 +186,10 @@ svg { display: block; }
 .voice-card { text-align: center; }
 .voice-orb { margin: 10px auto 17px; }
 .voice-orb.listening { animation: pulse 1s infinite; }
+.voice-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; }
+.recording-preview { width: min(100%, 520px); margin: 18px auto 0; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-soft); }
+.recording-preview audio { display: block; width: 100%; margin-bottom: 12px; }
+.visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; padding: 0 !important; border: 0 !important; clip: rect(0 0 0 0) !important; white-space: nowrap !important; }
 .transcript { margin: 20px 0 12px; padding: 14px; border-radius: 14px; text-align: left; background: var(--surface-soft); }
 .transcript span { color: var(--muted); font-size: 9px; }
 .transcript p { margin: 6px 0 0; line-height: 1.6; }
