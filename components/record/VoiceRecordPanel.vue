@@ -129,7 +129,7 @@ async function toggle() {
     stopStream()
     showDeviceRecorderFallback.value = true
     error.value = cause instanceof DOMException && cause.name === 'NotAllowedError'
-      ? '麥克風權限被拒絕。可到網站設定允許麥克風後重試，或改用裝置錄音'
+      ? '麥克風權限被拒絕。若網址列顯示憑證錯誤或「不安全」，瀏覽器會自動拒絕麥克風，須先讓裝置信任該站憑證；否則請到網站設定允許麥克風後重試，或改用裝置錄音'
       : cause instanceof DOMException && cause.name === 'NotFoundError'
         ? '找不到可用的麥克風裝置'
         : '無法取得麥克風權限'

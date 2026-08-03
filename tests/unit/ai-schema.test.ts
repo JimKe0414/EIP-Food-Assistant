@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { lunchRecommendationSchema, mealAnalysisResultSchema, transcriptionResultSchema } from '../../shared/domain/ai'
 import { eipNutritionEstimateResultSchema } from '../../shared/domain/eip-catalog'
 import { StubAiProvider } from '../../server/services/ai/stub'
-import { aiConfigurationFromEnv, validateAiConfiguration } from '../../server/services/ai'
+import { aiConfigurationFromEnv, createAiProvider, validateAiConfiguration } from '../../server/services/ai'
+
+afterEach(() => vi.unstubAllGlobals())
 
 describe('AI provider contract', () => {
   it('validates all three stub operations with the shared schemas', async () => {
@@ -47,5 +49,59 @@ describe('AI provider contract', () => {
       OPENAI_COMPAT_MAX_TOKENS: '0'
     })
     expect(() => validateAiConfiguration(config)).toThrow(/positive integer/i)
+  })
+
+  it('routes transcription to its own endpoint and key while chat keeps the shared pair', async () => {
+    const calls: { url: string, authorization: unknown }[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ url, authorization: new Headers(init.headers).get('authorization') })
+      return new Response(JSON.stringify({ text: '午餐吃了雞腿便當' }), { status: 200, headers: { 'content-type': 'application/json' } })
+    }))
+    const config = aiConfigurationFromEnv({
+      AI_EGRESS_MODE: 'cloud-approved',
+      AI_TEXT_PROVIDER: 'openai-compatible',
+      AI_AUDIO_PROVIDER: 'openai-compatible',
+      OPENAI_COMPAT_BASE_URL: 'https://chat.test/openai/v1',
+      OPENAI_COMPAT_API_KEY: 'chat-key',
+      OPENAI_COMPAT_AUDIO_BASE_URL: 'https://audio.test/openai/v1',
+      OPENAI_COMPAT_AUDIO_API_KEY: 'audio-key',
+      OPENAI_COMPAT_AUDIO_MODEL: 'whisper'
+    })
+    await createAiProvider(config, 'audio').transcribeMeal(new Uint8Array([1, 2, 3]), 'audio/webm')
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0].url).toBe('https://audio.test/openai/v1/audio/transcriptions')
+    expect(calls[0].authorization).toBe('Bearer audio-key')
+  })
+
+  it('keeps the api-version query when the audio base URL is an Azure deployment path', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      calls.push(url)
+      return new Response(JSON.stringify({ text: '午餐吃了雞腿便當' }), { status: 200, headers: { 'content-type': 'application/json' } })
+    }))
+    const config = aiConfigurationFromEnv({
+      AI_EGRESS_MODE: 'cloud-approved',
+      AI_AUDIO_PROVIDER: 'openai-compatible',
+      OPENAI_COMPAT_BASE_URL: 'https://chat.test/openai/v1',
+      OPENAI_COMPAT_API_KEY: 'chat-key',
+      OPENAI_COMPAT_AUDIO_BASE_URL: 'https://foundry.test/openai/deployments/whisper?api-version=2024-06-01',
+      OPENAI_COMPAT_AUDIO_API_KEY: 'audio-key',
+      OPENAI_COMPAT_AUDIO_MODEL: 'whisper'
+    })
+    await createAiProvider(config, 'audio').transcribeMeal(new Uint8Array([1, 2, 3]), 'audio/webm')
+
+    expect(calls[0]).toBe('https://foundry.test/openai/deployments/whisper/audio/transcriptions?api-version=2024-06-01')
+  })
+
+  it('rejects an audio endpoint that has no matching key', () => {
+    const config = aiConfigurationFromEnv({
+      AI_EGRESS_MODE: 'cloud-approved',
+      AI_AUDIO_PROVIDER: 'openai-compatible',
+      OPENAI_COMPAT_BASE_URL: 'https://chat.test/openai/v1',
+      OPENAI_COMPAT_API_KEY: 'chat-key',
+      OPENAI_COMPAT_AUDIO_BASE_URL: 'https://audio.test/openai/v1'
+    })
+    expect(() => validateAiConfiguration(config)).toThrow(/audio provider requires base URL and API key/i)
   })
 })
