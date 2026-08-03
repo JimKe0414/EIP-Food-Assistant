@@ -29,7 +29,6 @@ async function install() { await $pwa?.install() }
 function rejectInstall() {
   localStorage.setItem('food:install-rejected-until', String(Date.now() + 30 * 86_400_000))
   installEligible.value = false
-  $pwa?.cancelInstall()
 }
 </script>
 
