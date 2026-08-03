@@ -124,7 +124,10 @@ export default defineNuxtConfig({
         }
       ]
     },
-    client: { installPrompt: false },
+    // Truthy value registers the beforeinstallprompt listener that PwaStatus needs;
+    // the string is only the localStorage key for @vite-pwa's own permanent opt-out,
+    // which PwaStatus deliberately does not use (it keeps a 30-day snooze instead).
+    client: { installPrompt: 'food:pwa-install-dismissed' },
     devOptions: { enabled: true, suppressWarnings: true, type: 'module' }
   },
   routeRules: {
