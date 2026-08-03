@@ -1,5 +1,18 @@
 import { AiProviderError } from '~/shared/domain/ai'
 
+// Whisper-API-compatible endpoints commonly detect audio format from the uploaded filename's
+// extension rather than the file's actual content, so a mic recording's MIME type has to be
+// mapped to a matching extension before upload.
+const MIME_TYPE_EXTENSIONS: Record<string, string> = {
+  webm: 'webm', mp4: 'mp4', mpeg: 'mp3', mp3: 'mp3', wav: 'wav', 'x-wav': 'wav', 'wave': 'wav',
+  ogg: 'ogg', oga: 'oga', flac: 'flac', 'x-m4a': 'm4a', m4a: 'm4a'
+}
+
+export function extensionFromMimeType(mimeType: string): string {
+  const subtype = mimeType.split(';')[0].trim().split('/')[1] ?? ''
+  return MIME_TYPE_EXTENSIONS[subtype] ?? 'webm'
+}
+
 export async function fetchWithTimeout<T>(
   url: string,
   options: RequestInit,

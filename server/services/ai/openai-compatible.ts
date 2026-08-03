@@ -8,7 +8,7 @@ import {
   type PortionEstimateQuery,
   type TextOrImage
 } from '~/shared/domain/ai'
-import { fetchWithTimeout, mealSystemPrompt, parseJsonContent, portionEstimateSystemPrompt, recommendationSystemPrompt } from './base'
+import { extensionFromMimeType, fetchWithTimeout, mealSystemPrompt, parseJsonContent, portionEstimateSystemPrompt, recommendationSystemPrompt } from './base'
 
 interface OpenAiCompatibleOptions {
   baseUrl: string
@@ -42,7 +42,14 @@ export class OpenAiCompatibleProvider implements AiProvider {
   async transcribeMeal(audio: Uint8Array, mimeType: string) {
     const form = new FormData()
     form.append('model', this.options.audioModel)
-    form.append('file', new Blob([Uint8Array.from(audio)], { type: mimeType }), 'meal-audio')
+    // Whisper-API-compatible endpoints (this one included, per its Azure-flavored error message)
+    // detect format from the filename's extension, not the actual file content or the
+    // multipart part's Content-Type — an extensionless filename gets rejected as "invalid file
+    // format" even though the bytes themselves are a supported type. Desktop/mobile browsers
+    // default MediaRecorder to different container formats (e.g. webm vs mp4), so this only
+    // surfaced once mobile started sending something other than whatever desktop happened to
+    // send.
+    form.append('file', new Blob([Uint8Array.from(audio)], { type: mimeType }), `meal-audio.${extensionFromMimeType(mimeType)}`)
     return fetchWithTimeout(
       `${this.options.baseUrl.replace(/\/$/, '')}/audio/transcriptions`,
       { method: 'POST', headers: this.authHeaders(false), body: form },
