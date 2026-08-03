@@ -9,7 +9,18 @@ import {
   type PortionEstimateQuery,
   type TextOrImage
 } from '~/shared/domain/ai'
-import { fetchWithTimeout, mealSystemPrompt, parseJsonContent, portionEstimateSystemPrompt, recommendationSystemPrompt } from './base'
+import {
+  eipNutritionEstimateResultSchema,
+  type EipNutritionEstimateInputItem
+} from '~/shared/domain/eip-catalog'
+import {
+  eipNutritionEstimateSystemPrompt,
+  fetchWithTimeout,
+  mealSystemPrompt,
+  parseJsonContent,
+  portionEstimateSystemPrompt,
+  recommendationSystemPrompt
+} from './base'
 
 interface GoogleOptions { apiKey: string, textModel: string, visionModel: string, audioModel: string }
 
@@ -49,6 +60,13 @@ export class GoogleGenAiProvider implements AiProvider {
   async estimatePortionGrams(query: PortionEstimateQuery) {
     const content = await this.generate(this.options.textModel, [{ text: `${portionEstimateSystemPrompt}\n${JSON.stringify(query)}` }], 20_000)
     return portionEstimateSchema.parse(parseJsonContent(content))
+  }
+
+  async estimateEipMenuNutrition(items: EipNutritionEstimateInputItem[]) {
+    const content = await this.generate(this.options.textModel, [{
+      text: `${eipNutritionEstimateSystemPrompt}\n${JSON.stringify(items)}`
+    }], 90_000)
+    return eipNutritionEstimateResultSchema.parse(parseJsonContent(content))
   }
 
   private generate(model: string, parts: object[], timeoutMs: number) {

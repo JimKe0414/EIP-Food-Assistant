@@ -1,5 +1,7 @@
 <script setup lang="ts">
-const { data: summary } = await useFetch('/api/meals/summary')
+import type { DashboardSummary } from '~/types/dashboard'
+
+const { data: summary } = await useFetch<DashboardSummary>('/api/meals/summary', { key: 'meal-summary' })
 
 const bars = computed(() => {
   const daily = summary.value?.daily ?? []

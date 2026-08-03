@@ -1,4 +1,8 @@
 import { z } from 'zod'
+import type {
+  EipNutritionEstimateInputItem,
+  EipNutritionEstimateResult
+} from './eip-catalog'
 
 export const nutrientSummarySchema = z.object({
   caloriesKcal: z.number().nonnegative(),
@@ -39,6 +43,20 @@ export const lunchRecommendationSchema = z.object({
   reasonById: z.record(z.string(), z.string().max(300)).default({})
 })
 
+export const lunchCandidateContextSchema = z.object({
+  id: z.string().trim().min(1).max(100),
+  source: z.string().trim().min(1).max(30),
+  name: z.string().trim().min(1).max(160),
+  restaurantId: z.string().uuid().nullable().optional(),
+  restaurantName: z.string().trim().min(1).max(120).nullable().optional(),
+  caloriesKcal: z.number().nonnegative(),
+  proteinG: z.number().nonnegative().nullable(),
+  fatG: z.number().nonnegative().nullable(),
+  carbsG: z.number().nonnegative().nullable()
+})
+
+export const lunchFoodTypeSchema = z.enum(['meat', 'veg'])
+
 export const textOrImageSchema = z.object({
   text: z.string().trim().max(2000).optional(),
   imageBase64: z.string().max(15_000_000).optional(),
@@ -47,9 +65,23 @@ export const textOrImageSchema = z.object({
 
 export const lunchContextSchema = z.object({
   goal: z.string().trim().min(1).max(80),
+  foodType: lunchFoodTypeSchema.default('meat'),
   candidateIds: z.array(z.string().trim().min(1).max(100)).min(1).max(100),
+  candidates: z.array(lunchCandidateContextSchema).max(100).default([]),
   recentMealNames: z.array(z.string().max(160)).max(50).default([]),
   nutrientTargets: z.record(z.string(), z.number()).default({})
+}).superRefine((value, context) => {
+  const allowedIds = new Set(value.candidateIds)
+  const seenIds = new Set<string>()
+  for (const candidate of value.candidates) {
+    if (!allowedIds.has(candidate.id)) {
+      context.addIssue({ code: 'custom', path: ['candidates'], message: `Candidate ${candidate.id} is not present in candidateIds` })
+    }
+    if (seenIds.has(candidate.id)) {
+      context.addIssue({ code: 'custom', path: ['candidates'], message: `Candidate ${candidate.id} is duplicated` })
+    }
+    seenIds.add(candidate.id)
+  }
 })
 
 // Asked once a food name has been matched to a specific nutrients-table entry, so the model
@@ -70,6 +102,8 @@ export type MealCandidate = z.infer<typeof mealCandidateSchema>
 export type MealAnalysisResult = z.infer<typeof mealAnalysisResultSchema>
 export type TranscriptionResult = z.infer<typeof transcriptionResultSchema>
 export type LunchRecommendation = z.infer<typeof lunchRecommendationSchema>
+export type LunchCandidateContext = z.infer<typeof lunchCandidateContextSchema>
+export type LunchFoodType = z.infer<typeof lunchFoodTypeSchema>
 export type TextOrImage = z.infer<typeof textOrImageSchema>
 export type LunchContext = z.infer<typeof lunchContextSchema>
 export type PortionEstimateQuery = z.infer<typeof portionEstimateQuerySchema>
@@ -80,6 +114,7 @@ export interface AiProvider {
   transcribeMeal(audio: Uint8Array, mimeType: string): Promise<TranscriptionResult>
   recommendLunch(context: LunchContext): Promise<LunchRecommendation>
   estimatePortionGrams(query: PortionEstimateQuery): Promise<PortionEstimate>
+  estimateEipMenuNutrition(items: EipNutritionEstimateInputItem[]): Promise<EipNutritionEstimateResult>
 }
 
 export class AiProviderError extends Error {
@@ -91,4 +126,25 @@ export class AiProviderError extends Error {
     super(message, options)
     this.name = 'AiProviderError'
   }
+}
+
+const vegetarianForbiddenContent = /(?:葷|肉|豬|牛|羊|雞|鴨|鵝|魚|鮭|鮪|鯖|鱈|鯛|鰻|蝦|蟹|蚵|蛤|貝|魷|花枝|透抽|章魚|干貝|海鮮|培根|火腿|香腸|排骨|chicken|beef|pork|lamb|mutton|duck|turkey|fish|salmon|tuna|seafood|shrimp|prawn|crab|bacon|ham|sausage)/iu
+
+export function enforceLunchRecommendationPolicy(context: LunchContext, recommendation: LunchRecommendation) {
+  const candidatesById = new Map(context.candidates.map(candidate => [candidate.id, candidate]))
+  for (const candidateId of recommendation.candidateIds) {
+    if (!context.candidateIds.includes(candidateId) || !candidatesById.has(candidateId)) {
+      throw new AiProviderError('INVALID_RECOMMENDATION_CANDIDATE', 'AI selected a candidate outside the supplied list')
+    }
+  }
+
+  if (context.foodType === 'veg') {
+    const selectedNames = recommendation.candidateIds.map(id => candidatesById.get(id)?.name ?? '')
+    const responseReasons = Object.values(recommendation.reasonById)
+    if ([...selectedNames, ...responseReasons].some(content => vegetarianForbiddenContent.test(content))) {
+      throw new AiProviderError('VEGETARIAN_POLICY_VIOLATION', 'Vegetarian recommendation contained disallowed animal-food content')
+    }
+  }
+
+  return recommendation
 }

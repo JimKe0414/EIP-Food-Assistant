@@ -14,22 +14,23 @@ export interface Metric {
 }
 
 export interface MenuItem {
+  id: string
+  source: 'eip' | 'custom' | 'tfda'
+  restaurantName?: string | null
   name: string
   kcal: string
   reason: string
-  score: number
+  rank: number | null
   protein: string
   vegetable: string
-}
-
-export interface Vendor {
-  name: string
-  description: string
-  badge: string
-  time: string
-  highlight: string
-  recent: string
-  menus: MenuItem[]
+  nutrients: {
+    caloriesKcal: number
+    proteinG: number | null
+    fatG: number | null
+    carbsG: number | null
+    fiberG: number | null
+    sodiumMg: number | null
+  }
 }
 
 export interface Profile {
@@ -38,6 +39,6 @@ export interface Profile {
   height: number
   weight: number
   bodyFat: number | null
-  muscle: number
+  muscle: number | null
   activity: number
 }

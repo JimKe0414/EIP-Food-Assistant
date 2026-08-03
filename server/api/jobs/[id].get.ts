@@ -1,5 +1,6 @@
 import { AI_QUEUE, aiJobSchema } from '~/shared/domain/jobs'
-import { lunchRecommendationSchema } from '~/shared/domain/ai'
+import { enforceLunchRecommendationPolicy, lunchRecommendationSchema } from '~/shared/domain/ai'
+import { eipMenuImportResultSchema } from '~/shared/domain/eip-catalog'
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
@@ -27,15 +28,23 @@ export default defineEventHandler(async (event) => {
   if (job.state === 'completed' && data.data.type === 'recommendLunch') {
     const parsed = lunchRecommendationSchema.safeParse(output)
     if (parsed.success) {
-      const allowedIds = new Set(data.data.context.candidateIds)
-      const candidateIds = parsed.data.candidateIds.filter(id => allowedIds.has(id))
-      output = {
-        candidateIds,
-        reasonById: Object.fromEntries(candidateIds.map(id => [id, parsed.data.reasonById[id] ?? '符合目前條件']))
+      try {
+        const safeRecommendation = enforceLunchRecommendationPolicy(data.data.context, parsed.data)
+        const candidateIds = safeRecommendation.candidateIds
+        output = {
+          candidateIds,
+          reasonById: Object.fromEntries(candidateIds.map(id => [id, safeRecommendation.reasonById[id] ?? '符合目前條件']))
+        }
+      } catch {
+        output = { candidateIds: [], reasonById: {} }
       }
     } else {
       output = { candidateIds: [], reasonById: {} }
     }
+  }
+  if (job.state === 'completed' && data.data.type === 'estimateEipMenuNutrition') {
+    const parsed = eipMenuImportResultSchema.safeParse(output)
+    output = parsed.success ? parsed.data : undefined
   }
 
   // pg-boss stores { message, stack } as the job's output when a handler throws — surface the

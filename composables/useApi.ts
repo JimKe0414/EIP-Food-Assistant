@@ -1,4 +1,5 @@
 import type { MealAnalysisResult, TranscriptionResult } from '~/shared/domain/ai'
+import type { FoodType } from '~/types/diet'
 
 interface JobResponse<T> {
   state: string
@@ -9,23 +10,70 @@ interface JobResponse<T> {
 
 export type JobProgress = { queueDepth?: number }
 
+interface LunchCandidateResponse {
+  id: string
+  source: 'eip' | 'custom' | 'tfda'
+  name: string
+  restaurantId?: string | null
+  restaurantName?: string | null
+  caloriesKcal: number
+  proteinG: number | null
+  fatG: number | null
+  carbsG: number | null
+}
+
+interface LunchRecommendationOutput {
+  candidateIds: string[]
+  reasonById: Record<string, string>
+}
+
 export function useApi() {
   let csrfToken: string | undefined
+  const { todayDate } = useAppDate()
+  const { notify } = useDietApp()
+  const route = useRoute()
+
+  async function handleApiError(error: unknown): Promise<never> {
+    const status = Number((error as { status?: number, statusCode?: number, response?: { status?: number } })?.response?.status
+      ?? (error as { status?: number })?.status
+      ?? (error as { statusCode?: number })?.statusCode)
+    if (status === 401 && import.meta.client) {
+      notify('登入狀態已失效，請重新登入')
+      await navigateTo({
+        path: '/login',
+        query: { reason: 'auth', redirect: route.fullPath }
+      })
+    }
+    throw error
+  }
 
   async function post<T>(url: string, body?: Record<string, any>) {
-    csrfToken ||= (await $fetch<{ token: string }>('/api/csrf-token')).token
-    return $fetch<T>(url, { method: 'POST', body, headers: { 'x-csrf-token': csrfToken } })
+    try {
+      csrfToken ||= (await $fetch<{ token: string }>('/api/csrf-token')).token
+      return await $fetch<T>(url, { method: 'POST', body, headers: { 'x-csrf-token': csrfToken } })
+    } catch (error) {
+      return handleApiError(error)
+    }
   }
 
   async function postForm<T>(url: string, body: FormData) {
-    csrfToken ||= (await $fetch<{ token: string }>('/api/csrf-token')).token
-    return $fetch<T>(url, { method: 'POST', body, headers: { 'x-csrf-token': csrfToken } })
+    try {
+      csrfToken ||= (await $fetch<{ token: string }>('/api/csrf-token')).token
+      return await $fetch<T>(url, { method: 'POST', body, headers: { 'x-csrf-token': csrfToken } })
+    } catch (error) {
+      return handleApiError(error)
+    }
   }
 
   async function waitForJob<T>(statusUrl: string, timeoutMs: number, onProgress?: (progress: JobProgress) => void): Promise<T> {
     const deadline = Date.now() + timeoutMs
     while (Date.now() < deadline) {
-      const job = await $fetch<JobResponse<T>>(statusUrl)
+      let job: JobResponse<T>
+      try {
+        job = await $fetch<JobResponse<T>>(statusUrl)
+      } catch (error) {
+        return handleApiError(error)
+      }
       onProgress?.({ queueDepth: job.queueDepth })
       if (job.state === 'completed' && job.output !== undefined) return job.output
       if (job.state === 'failed') throw new Error(job.error?.message ?? 'AI task failed')
@@ -54,7 +102,28 @@ export function useApi() {
     return waitForJob<TranscriptionResult>(queued.statusUrl, 240_000, onProgress)
   }
 
-  return { post, postForm, waitForJob, analyzeText, analyzeImage, transcribeAudio }
+  async function recommendLunch(goal: string, foodType: FoodType, useMockData = false, serviceDate = todayDate(), restaurantId: string | null = null) {
+    const queued = await post<{
+      statusUrl: string
+      candidates: LunchCandidateResponse[]
+      dataMode: 'live' | 'mock'
+      warning?: string
+    }>('/api/recommend-lunch', {
+      goal,
+      foodType,
+      useMockData,
+      serviceDate,
+      restaurantId
+    })
+    const output = await waitForJob<LunchRecommendationOutput>(queued.statusUrl, 30_000)
+    return { ...queued, output }
+  }
+
+  async function confirmLunch(candidateId: string, foodType: FoodType, serviceDate: string = todayDate(), clientRequestId: string = crypto.randomUUID(), restaurantId: string | null = null) {
+    return post('/api/recommend-lunch/confirm', { candidateId, foodType, serviceDate, clientRequestId, restaurantId })
+  }
+
+  return { post, postForm, waitForJob, analyzeText, analyzeImage, transcribeAudio, recommendLunch, confirmLunch }
 }
 
 export async function fileToBase64(file: Blob) {

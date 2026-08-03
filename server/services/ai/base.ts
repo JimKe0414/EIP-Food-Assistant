@@ -71,8 +71,14 @@ photo) or the text describes no food, return an empty candidates array — do no
 food guess just to have something to return. In that case, summary must explain that no food was detected.
 Use null for a nutrient value when it cannot be estimated. Do not provide medical diagnosis.`
 
-export const recommendationSystemPrompt = `Select only candidate IDs present in candidateIds. Return JSON only:
-{"candidateIds":["uuid"],"reasonById":{"uuid":"short reason"}}. Never invent IDs.
+export const recommendationSystemPrompt = `Recommend up to three lunch candidates using foodType, the goal, candidate nutrition details, recent meals, and nutrient targets.
+Rules:
+1. Select only IDs present in candidateIds. Never invent IDs.
+2. When foodType is "veg", select vegetarian candidates only.
+3. When foodType is "veg", candidateIds and every reasonById value must not mention, compare with, or refer to meat, poultry, seafood, or related dish names, including statements that say those foods are absent.
+4. Vegetarian reasons must discuss only the selected vegetarian candidate's plant ingredients, nutrition, and suitability for the goal.
+Return JSON only:
+{"candidateIds":["candidate-id"],"reasonById":{"candidate-id":"short Traditional Chinese reason"}}.
 If nutrientTargets is non-empty, it is the user's remaining nutrient budget for the rest of today (calories/protein/
 fat/carbs already adjusted for what they've logged so far) — prefer candidates whose calories fit within
 nutrientTargets.caloriesKcal rather than picking the largest/richest option regardless of it, and mention the fit in
@@ -85,3 +91,12 @@ originalDescription (what the user/model first said this food was), portionDescr
 to — trust this as the concrete food identity over your own reading of originalDescription, since it is the entry
 whose per-100g nutrition values will actually be used).
 Return JSON only: {"estimatedGrams": number|null}. Use null only if you genuinely cannot judge a weight.`
+
+export const eipNutritionEstimateSystemPrompt = `Estimate nutrition for prepared restaurant menu items using one normal restaurant serving per item.
+The user message is a JSON array. Each entry contains rowId, restaurantName, name, foodType, known nutrient values,
+and missingFields. Return exactly one entry for every supplied rowId, in the same order, with no extra IDs.
+Never alter or repeat restaurant names or meal names. Estimate all six nutrient fields even when only some are missing;
+the server will preserve every value supplied by the import file and use your values only for missing fields.
+Use plausible numeric values, not null, for caloriesKcal, proteinG, fatG, carbsG, fiberG, and sodiumMg.
+Return JSON only:
+{"items":[{"rowId":"row-id","nutrients":{"caloriesKcal":0,"proteinG":0,"fatG":0,"carbsG":0,"fiberG":0,"sodiumMg":0}}]}`

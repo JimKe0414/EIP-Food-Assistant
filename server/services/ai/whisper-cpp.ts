@@ -56,4 +56,8 @@ export class WhisperCppProvider implements AiProvider {
   estimatePortionGrams(): Promise<never> {
     throw new AiProviderError('UNSUPPORTED_OPERATION', 'whisper.cpp does not estimate portions')
   }
+
+  estimateEipMenuNutrition(): Promise<never> {
+    throw new AiProviderError('UNSUPPORTED_OPERATION', 'whisper.cpp does not estimate menu nutrition')
+  }
 }

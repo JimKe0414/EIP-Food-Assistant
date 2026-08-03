@@ -62,7 +62,7 @@
 
 ### 第三期：一週為單位的攝取追蹤（你提到「當天效果不大，一週才看得出管理成效」）
 
-目標：`/trend` 頁面從目前的假資料（`~/data/mock`）換成真實查詢，並且加上「今天已吃多少 / 還剩多少額度 / 是否超標」的即時提示，累積到週視圖。
+目標：`/trend` 頁面從原本的假資料（`~/data/mock`）換成真實查詢，並且加上「今天已吃多少 / 還剩多少額度 / 是否超標」的即時提示，累積到週視圖。
 
 **實作完成（2026-07-22）**：新增 `GET /api/meals/summary`，彙總今日與近 7 日的熱量/蛋白質/脂肪/碳水/纖維/鈉，有個人資料時（`calculateBodyMetrics()` 的 TDEE）一併算出每日目標（蛋白質依體重 1.2g/kg、脂肪占熱量 30%、碳水補滿剩餘熱量的簡單分配公式，不是個人化飲食建議，只是給追蹤功能一個具體對照數字）。首頁「今日進度」、`WeeklyMiniChart`、`/trend` 頁的長條圖與營養素分布圖都換成真實查詢，實測存一筆餐食+設定個人資料後驗證數字正確。
 
@@ -87,6 +87,6 @@
 ## 附註：目前系統已經蓋好、可以直接沿用的部分
 
 - AI provider 抽象層（`server/services/ai/**`）與非同步任務佇列（pg-boss + `/api/jobs/:id` 輪詢）已完整，接 Ollama 只需要改 `.env`
-- 食物名稱模糊比對 `findBestFoodMatch()`、單位換算 `convertToGrams()`（`shared/domain/food-matching.ts`）已寫好且有單元測試，只是還沒被任何 API 呼叫
+- 食物名稱模糊比對 `findBestFoodMatch()`、單位換算 `convertToGrams()`（`shared/domain/food-matching.ts`）已接進分析流程並有單元測試
 - 精準版 BMR/TDEE 計算 `calculateBodyMetrics()`（`shared/domain/body-metrics.ts`）已完整，`profile_snapshots` 表也已經在存使用者的年齡/性別/身高/體重/體脂
-- 午餐推薦（`recommend-lunch.post.ts`）已經會查 `nutrients` 表當作候選來源之一，但 `nutrientTargets` 目前永遠是空物件，沒有真的把使用者的熱量目標帶進推薦邏輯
+- 午餐推薦（`recommend-lunch.post.ts`）會查 DB 候選，並把使用者最新個人快照算出的剩餘熱量與巨量營養素目標帶進推薦邏輯；確認後由伺服器寫入正式餐食紀錄

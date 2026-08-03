@@ -8,6 +8,10 @@ import {
   type PortionEstimateQuery,
   type TextOrImage
 } from '~/shared/domain/ai'
+import {
+  eipNutritionEstimateResultSchema,
+  type EipNutritionEstimateInputItem
+} from '~/shared/domain/eip-catalog'
 
 export class StubAiProvider implements AiProvider {
   async analyzeMeal(input: TextOrImage) {
@@ -39,5 +43,24 @@ export class StubAiProvider implements AiProvider {
   async estimatePortionGrams(query: PortionEstimateQuery) {
     void query
     return portionEstimateSchema.parse({ estimatedGrams: 150 })
+  }
+
+  async estimateEipMenuNutrition(items: EipNutritionEstimateInputItem[]) {
+    return eipNutritionEstimateResultSchema.parse({
+      items: items.map((item) => {
+        const seed = [...item.name].reduce((sum, character) => sum + (character.codePointAt(0) ?? 0), 0)
+        return {
+          rowId: item.rowId,
+          nutrients: {
+            caloriesKcal: 360 + seed % 361,
+            proteinG: 12 + seed % 31,
+            fatG: 8 + seed % 23,
+            carbsG: 35 + seed % 56,
+            fiberG: 3 + seed % 10,
+            sodiumMg: 480 + seed % 921
+          }
+        }
+      })
+    })
   }
 }

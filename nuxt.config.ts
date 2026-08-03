@@ -1,25 +1,77 @@
+const bundledIcons = [
+  'logos:google-icon',
+  'solar:add-circle-linear',
+  'solar:alt-arrow-down-linear',
+  'solar:arrow-right-linear',
+  'solar:bell-linear',
+  'solar:camera-linear',
+  'solar:chart-2-linear',
+  'solar:check-circle-bold',
+  'solar:check-circle-linear',
+  'solar:chef-hat-heart-linear',
+  'solar:chef-hat-linear',
+  'solar:close-circle-linear',
+  'solar:cloud-cross-linear',
+  'solar:home-2-linear',
+  'solar:info-circle-linear',
+  'solar:logout-2-linear',
+  'solar:magnifer-linear',
+  'solar:microphone-2-linear',
+  'solar:pen-linear',
+  'solar:pen-new-square-linear',
+  'solar:refresh-linear',
+  'solar:target-linear',
+  'solar:upload-linear',
+  'solar:user-rounded-linear',
+  'solar:verified-check-linear',
+  'svg-spinners:ring-resize'
+] as const
+
 export default defineNuxtConfig({
   compatibilityDate: '2025-05-15',
   devtools: { enabled: true },
   modules: ['@nuxt/icon', '@vite-pwa/nuxt'],
+  icon: {
+    // Inline SVGs do not need @nuxt/icon's runtime <style> injection, which is
+    // intentionally blocked by the nonce-only CSP after client-side navigation.
+    mode: 'svg',
+    provider: 'none',
+    serverBundle: false,
+    clientBundle: {
+      icons: [...bundledIcons],
+      scan: true,
+      sizeLimitKb: 128
+    }
+  },
   components: [
     { path: '~/components', pathPrefix: false }
   ],
+  nitro: {
+    // Avoid an invalid bare C:\... ESM import for xlsx in Windows dev builds.
+    externals: {
+      inline: ['xlsx']
+    }
+  },
   css: ['~/assets/css/main.css'],
   runtimeConfig: {
     databaseUrl: process.env.DATABASE_URL ?? '',
     sessionPassword: process.env.SESSION_PASSWORD ?? 'development-session-password-change-me-32-chars',
     identityHmacSecret: process.env.IDENTITY_HMAC_SECRET ?? 'development-identity-hmac-secret-change-me',
+    authMode: process.env.AUTH_MODE ?? 'dev',
     googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-    googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? 'http://localhost:3000/api/auth/google-callback',
-    googleWorkspaceDomain: process.env.GOOGLE_WORKSPACE_DOMAIN ?? 'example.com',
+    googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? 'https://localhost:3000/api/auth/google-callback',
+    googleWorkspaceDomain: process.env.GOOGLE_WORKSPACE_DOMAIN ?? '',
     allowDevAuth: process.env.ALLOW_DEV_AUTH === 'true',
     tfdaAutoDownload: process.env.TFDA_AUTO_DOWNLOAD === 'true',
     tfdaNutrientXlsxUrl: process.env.TFDA_NUTRIENT_XLSX_URL ?? 'https://consumer.fda.gov.tw/uc/GetFile.ashx?type=ServerFile&id=4862259227103213368',
     internalWorkerToken: process.env.INTERNAL_WORKER_TOKEN ?? '',
+    appTimeZone: process.env.APP_TIME_ZONE ?? 'Asia/Taipei',
     public: {
-      aiProcessingMode: process.env.AI_EGRESS_MODE === 'cloud-approved' ? 'cloud' : 'local'
+      authMode: process.env.AUTH_MODE ?? 'dev',
+      aiProcessingMode: process.env.AI_EGRESS_MODE === 'cloud-approved' ? 'cloud' : 'local',
+      appTimeZone: process.env.APP_TIME_ZONE ?? 'Asia/Taipei',
+      e2eBypassAuth: process.env.E2E_BYPASS_AUTH === 'true'
     }
   },
   pwa: {
@@ -72,13 +124,20 @@ export default defineNuxtConfig({
         }
       ]
     },
-    client: { installPrompt: false },
+    // Truthy value registers the beforeinstallprompt listener that PwaStatus needs;
+    // the string is only the localStorage key for @vite-pwa's own permanent opt-out,
+    // which PwaStatus deliberately does not use (it keeps a 30-day snooze instead).
+    client: { installPrompt: 'food:pwa-install-dismissed' },
     devOptions: { enabled: true, suppressWarnings: true, type: 'module' }
   },
   routeRules: {
     '/api/**': { headers: { 'cache-control': 'no-store' } }
   },
   app: {
+    pageTransition: {
+      name: 'page',
+      mode: 'out-in'
+    },
     head: {
       htmlAttrs: { lang: 'zh-Hant' },
       title: '一食之選｜EIP 智慧飲食助手',

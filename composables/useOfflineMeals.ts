@@ -10,8 +10,12 @@ export function useOfflineMeals() {
   async function queueMeal(payload: MealInput) {
     if (!import.meta.client) return
     const database = await openDatabase()
+    const queuedPayload = {
+      ...payload,
+      clientRequestId: payload.clientRequestId ?? crypto.randomUUID()
+    }
     await requestPromise(database.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).put({
-      id: crypto.randomUUID(), payload, attempts: 0, createdAt: new Date().toISOString()
+      id: crypto.randomUUID(), payload: queuedPayload, attempts: 0, createdAt: new Date().toISOString()
     }))
     database.close()
     await refreshCount()
@@ -53,12 +57,20 @@ export function useOfflineMeals() {
     await refreshCount()
   }
 
+  function onServiceWorkerMessage(event: MessageEvent) {
+    refreshCount()
+    if (event.data?.type === 'MEALS_SYNCED') refreshNuxtData('meal-summary')
+  }
+
   onMounted(() => {
     refreshCount()
     window.addEventListener('online', retryInForeground)
-    navigator.serviceWorker?.addEventListener('message', refreshCount)
+    navigator.serviceWorker?.addEventListener('message', onServiceWorkerMessage)
   })
-  onBeforeUnmount(() => window.removeEventListener('online', retryInForeground))
+  onBeforeUnmount(() => {
+    window.removeEventListener('online', retryInForeground)
+    navigator.serviceWorker?.removeEventListener('message', onServiceWorkerMessage)
+  })
 
   return { pendingCount, queueMeal, refreshCount }
 }

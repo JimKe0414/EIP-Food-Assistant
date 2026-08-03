@@ -1,7 +1,7 @@
 services:
   web:
     environment:
-      AI_EGRESS_MODE: cloud-approved
+      NUXT_PUBLIC_AI_PROCESSING_MODE: cloud
 
   worker:
     environment:

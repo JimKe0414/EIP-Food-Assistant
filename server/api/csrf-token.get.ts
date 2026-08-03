@@ -5,7 +5,7 @@ export default defineEventHandler((event) => {
   setCookie(event, 'food_csrf', token, {
     httpOnly: false,
     secure: useSecureCookies(),
-    sameSite: 'strict',
+    sameSite: 'lax',
     path: '/',
     maxAge: 60 * 60 * 2
   })
