@@ -21,6 +21,30 @@ import {
   recommendationSystemPrompt
 } from './base'
 
+/** Whisper-style transcription endpoints (OpenAI's and Azure's alike) sniff the audio container
+ * from the upload's *filename extension* and reject anything they can't name — the MIME type on
+ * the blob is ignored. Browser recordings arrive as audio/webm or audio/mp4, so map the type
+ * back to an extension the endpoint lists as supported. */
+const audioExtensions: Record<string, string> = {
+  'audio/webm': 'webm',
+  'audio/ogg': 'ogg',
+  'audio/mp4': 'mp4',
+  'audio/m4a': 'm4a',
+  'audio/x-m4a': 'm4a',
+  'audio/mpeg': 'mp3',
+  'audio/mp3': 'mp3',
+  'audio/wav': 'wav',
+  'audio/wave': 'wav',
+  'audio/x-wav': 'wav',
+  'audio/flac': 'flac',
+  'audio/x-flac': 'flac'
+}
+
+function audioFileName(mimeType: string) {
+  const base = mimeType.split(';')[0].trim().toLowerCase()
+  return `meal-audio.${audioExtensions[base] || 'webm'}`
+}
+
 interface OpenAiCompatibleOptions {
   baseUrl: string
   apiKey: string
@@ -51,11 +75,14 @@ export class OpenAiCompatibleProvider implements AiProvider {
   }
 
   async transcribeMeal(audio: Uint8Array, mimeType: string) {
+    if (!this.options.audioModel) {
+      throw new Error('OPENAI_COMPAT_AUDIO_MODEL（或 AI_AUDIO_MODEL）未設定，無法進行語音轉文字')
+    }
     const form = new FormData()
     form.append('model', this.options.audioModel)
-    form.append('file', new Blob([Uint8Array.from(audio)], { type: mimeType }), 'meal-audio')
+    form.append('file', new Blob([Uint8Array.from(audio)], { type: mimeType }), audioFileName(mimeType))
     return fetchWithTimeout(
-      `${this.options.baseUrl.replace(/\/$/, '')}/audio/transcriptions`,
+      this.endpoint('/audio/transcriptions'),
       { method: 'POST', headers: this.authHeaders(false), body: form },
       60_000,
       async response => transcriptionResultSchema.parse({ ...(await response.json()), confidence: null })
@@ -77,9 +104,20 @@ export class OpenAiCompatibleProvider implements AiProvider {
     return eipNutritionEstimateResultSchema.parse(parseJsonContent(content))
   }
 
+  /** Azure exposes transcription as /openai/deployments/<deployment>/audio/transcriptions and
+   * *requires* an ?api-version= query param, so a configured base URL may legitimately carry a
+   * query string. Plain concatenation would bury the route inside it
+   * (".../whisper?api-version=2024-06-01/audio/transcriptions"), so append to the path instead
+   * and let the search params ride along. */
+  private endpoint(path: string) {
+    const url = new URL(this.options.baseUrl)
+    url.pathname = `${url.pathname.replace(/\/$/, '')}${path}`
+    return url.toString()
+  }
+
   private chat(model: string, system: string, content: unknown, timeoutMs: number) {
     return fetchWithTimeout(
-      `${this.options.baseUrl.replace(/\/$/, '')}/chat/completions`,
+      this.endpoint('/chat/completions'),
       {
         method: 'POST',
         headers: this.authHeaders(true),
