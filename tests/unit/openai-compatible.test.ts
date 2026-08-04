@@ -1,7 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OpenAiCompatibleProvider } from '../../server/services/ai/openai-compatible'
 
-afterEach(() => vi.unstubAllGlobals())
+const transcodeToWav = vi.hoisted(() => vi.fn(async () => Buffer.from([9, 9, 9])))
+vi.mock('../../server/services/ai/base', async importOriginal => ({
+  ...(await importOriginal<typeof import('../../server/services/ai/base')>()),
+  transcodeToWav
+}))
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  transcodeToWav.mockClear()
+})
 
 describe('OpenAI-compatible lunch recommendation', () => {
   it('sends candidate details and configured max_tokens', async () => {
@@ -67,5 +76,33 @@ describe('OpenAI-compatible transcription upload', () => {
     const calls = request.mock.calls as unknown as Array<[RequestInfo | URL, RequestInit?]>
     const form = calls[0]?.[1]?.body as FormData
     expect((form.get('file') as File).name).toBe(expected)
+    expect(transcodeToWav).not.toHaveBeenCalled()
+  })
+
+  // Android's device recorder hands back audio/3gpp or audio/amr, which the endpoint decodes and
+  // rejects outright — renaming them to a listed extension doesn't help, only transcoding does.
+  it.each(['audio/3gpp', 'audio/amr', 'audio/aac', ''])('transcodes an unsupported %s upload to WAV', async mimeType => {
+    const request = vi.fn(async () => new Response(JSON.stringify({ text: '早餐吃了鮪魚蛋吐司' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    }))
+    vi.stubGlobal('fetch', request)
+
+    const provider = new OpenAiCompatibleProvider({
+      baseUrl: 'https://example.test/openai/v1',
+      apiKey: 'test-only',
+      textModel: '',
+      visionModel: '',
+      audioModel: 'whisper',
+      maxTokens: 4096
+    })
+    await provider.transcribeMeal(new Uint8Array([1, 2, 3]), mimeType)
+
+    expect(transcodeToWav).toHaveBeenCalledOnce()
+    const calls = request.mock.calls as unknown as Array<[RequestInfo | URL, RequestInit?]>
+    const file = (calls[0]?.[1]?.body as FormData).get('file') as File
+    expect(file.name).toBe('meal-audio.wav')
+    expect(file.type).toBe('audio/wav')
+    expect(await file.arrayBuffer()).toEqual(Uint8Array.from([9, 9, 9]).buffer)
   })
 })

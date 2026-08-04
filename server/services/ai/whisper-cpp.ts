@@ -1,26 +1,5 @@
-import { spawn } from 'node:child_process'
 import { AiProviderError, transcriptionResultSchema, type AiProvider } from '~/shared/domain/ai'
-import { fetchWithTimeout } from './base'
-
-/** whisper.cpp's built-in decoder only reads raw WAV/PCM — browser mic recordings arrive as
- * WebM/Opus, which it fails to decode ("failed to decode audio data from memory buffer").
- * Transcode with ffmpeg before uploading so the container/codec never reaches whisper.cpp. */
-function transcodeToWav(input: Uint8Array): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const ffmpeg = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-ar', '16000', '-ac', '1', '-f', 'wav', 'pipe:1'])
-    const chunks: Buffer[] = []
-    let stderr = ''
-    ffmpeg.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
-    ffmpeg.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
-    ffmpeg.on('error', reject)
-    ffmpeg.on('close', code => {
-      if (code === 0) resolve(Buffer.concat(chunks))
-      else reject(new Error(`ffmpeg exited with code ${code}: ${stderr}`))
-    })
-    ffmpeg.stdin.write(Buffer.from(input))
-    ffmpeg.stdin.end()
-  })
-}
+import { fetchWithTimeout, transcodeToWav } from './base'
 
 /** Talks to whisper.cpp's `examples/server` HTTP API (POST /inference), not the faster-whisper
  * FastAPI service that LocalWhisperProvider targets — the two have different routes/response shapes. */
@@ -32,6 +11,8 @@ export class WhisperCppProvider implements AiProvider {
   }
 
   async transcribeMeal(audio: Uint8Array, _mimeType: string) {
+    // whisper.cpp's built-in decoder only reads raw WAV/PCM — browser mic recordings arrive as
+    // WebM/Opus, which it fails to decode ("failed to decode audio data from memory buffer").
     let wav: Buffer
     try {
       wav = await transcodeToWav(audio)
