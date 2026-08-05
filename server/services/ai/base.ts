@@ -1,4 +1,25 @@
+import { spawn } from 'node:child_process'
 import { AiProviderError } from '~/shared/domain/ai'
+
+/** Transcode any container/codec ffmpeg can read into 16 kHz mono WAV. Used wherever a
+ * transcription backend can't take the recording as-is — whisper.cpp only decodes raw WAV/PCM,
+ * and Whisper HTTP endpoints reject containers outside their published format list. */
+export function transcodeToWav(input: Uint8Array): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const ffmpeg = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-ar', '16000', '-ac', '1', '-f', 'wav', 'pipe:1'])
+    const chunks: Buffer[] = []
+    let stderr = ''
+    ffmpeg.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
+    ffmpeg.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+    ffmpeg.on('error', reject)
+    ffmpeg.on('close', code => {
+      if (code === 0) resolve(Buffer.concat(chunks))
+      else reject(new Error(`ffmpeg exited with code ${code}: ${stderr}`))
+    })
+    ffmpeg.stdin.write(Buffer.from(input))
+    ffmpeg.stdin.end()
+  })
+}
 
 export async function fetchWithTimeout<T>(
   url: string,

@@ -1,4 +1,5 @@
 import {
+  AiProviderError,
   lunchRecommendationSchema,
   mealAnalysisResultSchema,
   portionEstimateSchema,
@@ -18,7 +19,8 @@ import {
   mealSystemPrompt,
   parseJsonContent,
   portionEstimateSystemPrompt,
-  recommendationSystemPrompt
+  recommendationSystemPrompt,
+  transcodeToWav
 } from './base'
 
 /** Whisper-style transcription endpoints (OpenAI's and Azure's alike) sniff the audio container
@@ -40,9 +42,8 @@ const audioExtensions: Record<string, string> = {
   'audio/x-flac': 'flac'
 }
 
-function audioFileName(mimeType: string) {
-  const base = mimeType.split(';')[0].trim().toLowerCase()
-  return `meal-audio.${audioExtensions[base] || 'webm'}`
+function audioExtension(mimeType: string) {
+  return audioExtensions[mimeType.split(';')[0].trim().toLowerCase()]
 }
 
 interface OpenAiCompatibleOptions {
@@ -78,9 +79,24 @@ export class OpenAiCompatibleProvider implements AiProvider {
     if (!this.options.audioModel) {
       throw new Error('OPENAI_COMPAT_AUDIO_MODEL（或 AI_AUDIO_MODEL）未設定，無法進行語音轉文字')
     }
+    // Anything outside the endpoint's format list (Android's device recorder hands back
+    // audio/3gpp or audio/amr, for one) can't just be renamed — the endpoint decodes the bytes
+    // and answers "Invalid file format. Supported formats: [...]". Transcode those to WAV first.
+    let payload = audio
+    let uploadType = mimeType
+    let extension = audioExtension(mimeType)
+    if (!extension) {
+      try {
+        payload = await transcodeToWav(audio)
+      } catch (error) {
+        throw new AiProviderError('PROVIDER_REQUEST_FAILED', `無法將 ${mimeType || '未知格式'} 的錄音轉為可辨識的音訊格式`, { cause: error })
+      }
+      uploadType = 'audio/wav'
+      extension = 'wav'
+    }
     const form = new FormData()
     form.append('model', this.options.audioModel)
-    form.append('file', new Blob([Uint8Array.from(audio)], { type: mimeType }), audioFileName(mimeType))
+    form.append('file', new Blob([Uint8Array.from(payload)], { type: uploadType }), `meal-audio.${extension}`)
     return fetchWithTimeout(
       this.endpoint('/audio/transcriptions'),
       { method: 'POST', headers: this.authHeaders(false), body: form },
